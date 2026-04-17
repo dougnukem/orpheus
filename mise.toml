@@ -16,8 +16,12 @@ pnpm = "9"
 # users need libwebkit2gtk-4.1-dev + friends (see .github/workflows/ci.yml).
 
 [env]
-# rustup-managed toolchain always wins over /opt/homebrew/bin/{cargo,rustc}
-_.path = ["{{ env.HOME }}/.cargo/bin"]
+# rustup-managed toolchain always wins over /opt/homebrew/bin/{cargo,rustc}.
+# Windows CI runners don't set $HOME — fall back to %USERPROFILE% there so
+# mise can still render the template.
+_.path = [
+    "{% if env.HOME %}{{ env.HOME }}/.cargo/bin{% elif env.USERPROFILE %}{{ env.USERPROFILE }}/.cargo/bin{% else %}{{ config_root }}/.cargo/bin{% endif %}",
+]
 RUST_BACKTRACE = "1"
 RUST_LOG       = "orpheus=info,tower_http=info"
 
@@ -62,7 +66,11 @@ run = "cargo build --workspace --all-targets"
 
 [tasks.test]
 description = "Run all Rust tests"
-run = "cargo test --workspace --locked"
+# orpheus-tauri has no tests of its own, and its tauri-build step requires
+# platform-specific icons (e.g. icons/icon.ico on Windows) that aren't
+# checked in yet. clippy --workspace still compile-checks it, and latest.yml
+# handles the full tauri build for releases.
+run = "cargo test --workspace --locked --exclude orpheus-tauri"
 
 [tasks."test:core"]
 description = "Run orpheus-core tests only"
@@ -100,11 +108,13 @@ run = "pnpm build"
 
 [tasks."web:lint"]
 description = "Run ESLint on the frontend"
+depends = ["web:install"]
 dir = "apps/web"
 run = "pnpm lint"
 
 [tasks."web:typecheck"]
 description = "Run the TS compiler without emitting"
+depends = ["web:install"]
 dir = "apps/web"
 run = "pnpm typecheck"
 
