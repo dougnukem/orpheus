@@ -31,13 +31,15 @@ class BitcoinCoreExtractor(Extractor):
         if not path.is_file():
             return False
         name = path.name.lower()
-        if name.endswith(".dat") or "wallet" in name:
-            return True
+        # Only claim files that look like Bitcoin Core wallets — prefix name checks
+        # aren't enough because MultiBit also uses *.wallet.
+        if not (name.endswith(".dat") or name == "wallet"):
+            return False
         try:
-            head = path.read_bytes()[:1024]
+            head = path.read_bytes()[:4096]
         except OSError:
             return False
-        return DER_PATTERN in head or b"main\x00" in head  # main subdb marker
+        return DER_PATTERN in head or b"main\x00" in head
 
     def extract(self, path: Path, passwords: list[str] | None = None) -> list[ExtractedKey]:
         data = path.read_bytes()

@@ -6,11 +6,11 @@ def test_version_exposed() -> None:
     assert orpheus.__version__.count(".") >= 1
 
 
-def test_cli_version_command() -> None:
+def test_cli_version_flag() -> None:
     from click.testing import CliRunner
 
     from orpheus.cli import main
 
-    result = CliRunner().invoke(main, ["version"])
+    result = CliRunner().invoke(main, ["--version"])
     assert result.exit_code == 0
     assert orpheus.__version__ in result.output
