@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Orpheus",
+  "version": "0.1.0",
+  "identifier": "com.orpheus.desktop",
+  "build": {
+    "beforeDevCommand": "cd ../../../apps/web && pnpm dev",
+    "beforeBuildCommand": "cd ../../../apps/web && pnpm build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../../../apps/web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Orpheus",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "backgroundColor": "#120a07"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: https://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' ipc: https://ipc.localhost"
+    }
+  },
+  "plugins": {}
+}
