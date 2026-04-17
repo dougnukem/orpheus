@@ -203,6 +203,14 @@ jobs:
       - name: list artifacts
         run: ls -la dist/
 
+      - name: sign artifacts with gpg
+        uses: ./.github/actions/sign-artifacts
+        with:
+          artifacts-dir: dist
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+
       - name: delete previous latest release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -222,5 +230,11 @@ jobs:
 
             - commit: `${{ github.sha }}`
             - run:    `${{ github.run_id }}`
+
+            All artifacts are GPG-signed. Verify with:
+            ```
+            gpg --verify SHA256SUMS.asc SHA256SUMS
+            sha256sum -c SHA256SUMS
+            ```
           files: dist/*
           fail_on_unmatched_files: true
