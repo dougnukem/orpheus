@@ -1,0 +1,36 @@
+cask "orpheus" do
+  version "%%VERSION%%"
+  sha256 "%%UNIVERSAL_SHA%%"
+
+  url "https://github.com/%%REPO%%/releases/download/v#{version}/Orpheus_#{version}_universal.dmg",
+      verified: "github.com/%%REPO%%/"
+  name "Orpheus"
+  desc "Recover lost cryptocurrency from forgotten wallets"
+  homepage "https://github.com/%%REPO%%"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  auto_updates false
+  depends_on macos: ">= :monterey"
+
+  app "Orpheus.app"
+
+  caveats <<~EOS
+    Orpheus is not yet signed with an Apple Developer ID. On first launch
+    macOS will block it. To run:
+
+      xattr -cr /Applications/Orpheus.app
+
+    Then open from Applications normally. This caveat will be removed
+    once Apple code signing is in place.
+  EOS
+
+  zap trash: [
+    "~/Library/Application Support/com.orpheus.desktop",
+    "~/Library/Preferences/com.orpheus.desktop.plist",
+    "~/Library/Logs/Orpheus",
+  ]
+end

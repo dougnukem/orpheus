@@ -1,0 +1,137 @@
+# Composite action: sign release artifacts with GPG and produce a signed
+# SHA256SUMS manifest.
+#
+# Inputs:
+#   artifacts-dir  — directory containing artifacts to sign (required)
+#   gpg-private-key — ASCII-armored private key, base64-encoded (required)
+#   gpg-passphrase  — passphrase for the private key (required)
+#   gpg-key-id      — long key ID used for signing (required)
+#
+# Behaviour:
+#   • Imports the key (batch, loopback pinentry).
+#   • Emits <file>.asc detached signatures for every regular file already
+#     present in artifacts-dir EXCEPT pre-existing .asc/.sig files and the
+#     SHA256SUMS manifest itself.
+#   • Generates SHA256SUMS covering every non-signature file, then produces
+#     a detached SHA256SUMS.asc signature alongside it.
+#
+# This action intentionally fails closed: if signing fails for any file the
+# whole action fails, so we never publish a partially-signed release.
+
+name: sign-artifacts
+description: "GPG-sign release artifacts and produce a signed SHA256SUMS manifest."
+
+inputs:
+  artifacts-dir:
+    description: "Directory containing artifacts to sign."
+    required: true
+  gpg-private-key:
+    description: "Base64-encoded ASCII-armored GPG private key."
+    required: true
+  gpg-passphrase:
+    description: "Passphrase protecting the GPG private key."
+    required: true
+  gpg-key-id:
+    description: "Long key ID (or fingerprint) used for signing."
+    required: true
+  strict:
+    description: "If 'true', fail when the signing key is absent. If 'false' (default), skip signing with a warning. Stable releases should pass strict=true; rolling/nightly releases should leave it false so the pipeline degrades gracefully until the key is provisioned."
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: check signing key is present
+      id: gate
+      shell: bash
+      env:
+        GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
+        STRICT: ${{ inputs.strict }}
+      run: |
+        set -euo pipefail
+        if [[ -z "$GPG_PRIVATE_KEY" ]]; then
+          if [[ "$STRICT" == "true" ]]; then
+            echo "::error::GPG_PRIVATE_KEY not set; refusing to publish an unsigned stable release"
+            exit 1
+          fi
+          echo "::warning::GPG_PRIVATE_KEY not set; skipping signing (non-strict mode)"
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: import gpg key
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
+        GPG_PASSPHRASE: ${{ inputs.gpg-passphrase }}
+        GPG_KEY_ID: ${{ inputs.gpg-key-id }}
+      run: |
+        set -euo pipefail
+        export GNUPGHOME="$(mktemp -d)"
+        echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+        chmod 700 "$GNUPGHOME"
+        printf '%s\n' "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
+        printf '%s\n' "pinentry-mode loopback" > "$GNUPGHOME/gpg.conf"
+        echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+        # Prime the agent with the passphrase so subsequent signs are silent.
+        echo "test" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+          --pinentry-mode loopback --local-user "$GPG_KEY_ID" \
+          --output /dev/null --sign - >/dev/null
+        gpg --list-secret-keys --keyid-format LONG
+
+    - name: sign artifacts + produce SHA256SUMS
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        ARTIFACTS_DIR: ${{ inputs.artifacts-dir }}
+        GPG_PASSPHRASE: ${{ inputs.gpg-passphrase }}
+        GPG_KEY_ID: ${{ inputs.gpg-key-id }}
+      run: |
+        set -euo pipefail
+        cd "$ARTIFACTS_DIR"
+        shopt -s nullglob
+        # Sign every regular file except pre-existing sigs + any prior manifest.
+        for f in *; do
+          [ -f "$f" ] || continue
+          case "$f" in
+            *.asc|*.sig|SHA256SUMS|SHA256SUMS.asc) continue ;;
+          esac
+          echo "signing: $f"
+          gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$GPG_KEY_ID" \
+              --detach-sign --armor \
+              --output "$f.asc" "$f"
+        done
+        # Build SHA256SUMS covering every non-signature artifact.
+        {
+          for f in *; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.asc|*.sig|SHA256SUMS|SHA256SUMS.asc) continue ;;
+            esac
+            shasum -a 256 "$f"
+          done
+        } > SHA256SUMS
+        # Detached signature over the plain-text SHA256SUMS file so users
+        # verify with the same command shape as every per-artifact sig:
+        #   gpg --verify SHA256SUMS.asc SHA256SUMS
+        gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" \
+            --local-user "$GPG_KEY_ID" \
+            --detach-sign --armor --output SHA256SUMS.asc SHA256SUMS
+        echo "--- signed artifacts ---"
+        ls -la
+        echo "--- SHA256SUMS ---"
+        cat SHA256SUMS
+
+    - name: cleanup gpg home
+      if: always()
+      shell: bash
+      run: |
+        if [ -n "${GNUPGHOME:-}" ] && [ -d "$GNUPGHOME" ]; then
+          rm -rf "$GNUPGHOME"
+        fi

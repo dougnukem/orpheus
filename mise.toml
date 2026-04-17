@@ -183,3 +183,10 @@ run = "pnpm tauri dev"
 description = "Package the Tauri desktop app for the current platform"
 dir = "crates/orpheus-tauri"
 run = "pnpm tauri build"
+
+[tasks."release:setup-gpg"]
+description = "One-time: generate the Orpheus release signing key + sync to GitHub secrets + .secrets"
+# raw = true preserves the controlling TTY so the script's silent
+# passphrase prompt (read -s) works.
+raw = true
+run = "./scripts/setup-gpg-release-key.sh"
