@@ -143,17 +143,7 @@ jobs:
           workspaces: "crates/orpheus-tauri/src-tauri -> target"
           shared-key: latest-tauri-${{ matrix.name }}
 
-      - name: install linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            libssl-dev
+      - uses: ./.github/actions/install-linux-deps
 
       - run: mise run web:install
       - uses: tauri-apps/tauri-action@v0
