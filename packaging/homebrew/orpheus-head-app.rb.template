@@ -1,0 +1,54 @@
+cask "orpheus-head-app" do
+  version :latest
+  sha256 :no_check
+
+  url "https://github.com/%%REPO%%/releases/download/latest/%%DMG_FILENAME%%",
+      verified: "github.com/%%REPO%%/"
+  name "Orpheus (HEAD desktop)"
+  desc "Recover lost cryptocurrency from forgotten wallets — rolling desktop build from main"
+  homepage "https://github.com/%%REPO%%"
+
+  auto_updates false
+  depends_on macos: ">= :monterey"
+
+  # The stable desktop cask and the CLI-only formula both put
+  # `orpheus` on PATH — declare the conflicts so brew rejects a
+  # simultaneous install instead of producing a broken symlink.
+  conflicts_with cask:    "%%TAP_OWNER%%/%%TAP_NAME%%/orpheus"
+  conflicts_with formula: "%%TAP_OWNER%%/%%TAP_NAME%%/orpheus-head"
+
+  app "Orpheus.app"
+  # `orpheus` CLI is bundled inside Orpheus.app via Tauri externalBin.
+  # Symlink it onto $PATH so this cask installs GUI + CLI together.
+  binary "#{appdir}/Orpheus.app/Contents/MacOS/orpheus"
+
+  caveats <<~EOS
+    orpheus-head-app tracks the tip of `main` and is rebuilt on every
+    push. Installed bits change without a version bump. For a
+    reproducible desktop install use `brew install --cask orpheus`
+    (tagged releases) once that cask is live.
+
+    To pull the newest HEAD build:
+
+      brew reinstall --cask orpheus-head-app
+
+    If you only need the command-line, install the formula instead —
+    it skips the .app bundle:
+
+      brew install %%TAP_OWNER%%/%%TAP_NAME%%/orpheus-head
+
+    Orpheus is not yet signed with an Apple Developer ID. On first
+    launch macOS will block the .app. To run:
+
+      xattr -cr /Applications/Orpheus.app
+
+    Then open from Applications normally. This caveat will be removed
+    once Apple code signing is in place.
+  EOS
+
+  zap trash: [
+    "~/Library/Application Support/com.orpheus.desktop",
+    "~/Library/Preferences/com.orpheus.desktop.plist",
+    "~/Library/Logs/Orpheus",
+  ]
+end

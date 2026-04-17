@@ -1,0 +1,62 @@
+# Homebrew formula for the rolling `orpheus` CLI. Ships the single
+# `orpheus` binary (which includes the `orpheus serve` subcommand).
+# See packaging/homebrew/README.md for the rendering flow.
+class OrpheusHead < Formula
+  desc "Recover lost cryptocurrency from forgotten wallets — rolling CLI build from main"
+  homepage "https://github.com/%%REPO%%"
+  version "%%VERSION%%"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/%%REPO%%/releases/download/latest/orpheus-macos-aarch64.tar.gz"
+      sha256 "%%MACOS_ARM_SHA%%"
+    end
+    on_intel do
+      url "https://github.com/%%REPO%%/releases/download/latest/orpheus-macos-x86_64.tar.gz"
+      sha256 "%%MACOS_INTEL_SHA%%"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/%%REPO%%/releases/download/latest/orpheus-linux-aarch64.tar.gz"
+      sha256 "%%LINUX_ARM_SHA%%"
+    end
+    on_intel do
+      url "https://github.com/%%REPO%%/releases/download/latest/orpheus-linux-x86_64.tar.gz"
+      sha256 "%%LINUX_INTEL_SHA%%"
+    end
+  end
+
+  conflicts_with cask: "%%TAP_OWNER%%/%%TAP_NAME%%/orpheus-head-app",
+                 because: "both provide an `orpheus` binary on PATH"
+
+  def install
+    bin.install "orpheus"
+  end
+
+  def caveats
+    <<~EOS
+      orpheus-head tracks the tip of `main` and is rebuilt on every
+      push. The version string encodes the commit SHA but Homebrew may
+      not see it as "upgradable" — pull fresh builds explicitly:
+
+        brew reinstall orpheus-head
+
+      macOS binaries are not signed. Gatekeeper may block the first
+      run — clear it with:
+
+        xattr -cr "$(brew --prefix)/bin/orpheus"
+
+      If you also want the desktop GUI, install the cask instead (it
+      bundles this CLI and the .app together):
+
+        brew install --cask %%TAP_OWNER%%/%%TAP_NAME%%/orpheus-head-app
+    EOS
+  end
+
+  test do
+    assert_match "orpheus", shell_output("#{bin}/orpheus --version")
+  end
+end
