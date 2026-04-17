@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "517364db24a1",
+  "session_id": "efe3044b-c7cf-4ccf-a7ce-9996d5194f9f",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T06:58:18.291725Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/orpheus/scanner.py",
+    "tests/test_balance.py",
+    "src/orpheus/balance.py",
+    "src/orpheus/data/mock_balances.json",
+    "src/orpheus/extractors/bitcoin_core.py",
+    "src/orpheus/extractors/encrypted.py",
+    "tests/test_smoke.py",
+    ".entire/logs/entire.log",
+    "scripts/build_fixtures.py",
+    "src/orpheus/cli.py",
+    "src/orpheus/data/demo-wallets/demo_descriptor_dump.json",
+    "src/orpheus/data/demo-wallets/demo_seed.txt",
+    "src/orpheus/extractors/bip39.py"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "8812093812d3",
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 41559,
+    "cache_read_tokens": 0,
+    "output_tokens": 1361,
+    "api_call_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T06:58:18.25172Z",
+    "agent_lines": 827,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 827,
+    "agent_percentage": 100
+  },
+  "transcript_path": ".claude/projects/-Users-ddaniels-Dropbox-orpheus/efe3044b-c7cf-4ccf-a7ce-9996d5194f9f.jsonl"
+}
