@@ -44,6 +44,13 @@ jobs:
       # orpheus-tauri's transitive deps (gdk-sys/atk-sys/webkit2gtk-sys) link
       # against the same Linux packages the test job installs.
       - uses: ./.github/actions/install-linux-deps
+      # mise installs 1.95 with rustup's minimal profile, which omits rustfmt
+      # and clippy. rust-toolchain.toml pins the components but rustup only
+      # auto-adds them during toolchain install, not when cargo runs against
+      # a pre-existing toolchain — so add them explicitly here.
+      - name: ensure rustfmt + clippy components
+        shell: bash
+        run: rustup component add rustfmt clippy
       - run: mise run lint
 
   rust-test:
