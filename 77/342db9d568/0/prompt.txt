@@ -1,0 +1,6 @@
+<ide_opened_file>The user opened the file /Users/ddaniels/Dropbox/orpheus/.worktrees/dependabot-actions/docs/RELEASING.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+yes HOMEBREW_TAP_TOKEN secret setup as repo secret,  merge pr
+
+---
+
+1
