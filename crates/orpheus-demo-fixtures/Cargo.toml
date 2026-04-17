@@ -1,0 +1,23 @@
+[package]
+name = "orpheus-demo-fixtures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Generator for Orpheus demo wallet fixtures"
+
+[[bin]]
+name = "orpheus-demo-fixtures"
+path = "src/main.rs"
+
+[dependencies]
+orpheus-core = { path = "../orpheus-core" }
+anyhow.workspace = true
+bip39.workspace = true
+bitcoin.workspace = true
+aes.workspace = true
+cbc.workspace = true
+hex.workspace = true
+serde_json.workspace = true

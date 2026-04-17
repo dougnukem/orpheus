@@ -1,0 +1,65 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/orpheus-core",
+    "crates/orpheus-cli",
+    "crates/orpheus-server",
+    "crates/orpheus-tauri/src-tauri",
+    "crates/orpheus-demo-fixtures",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+authors = ["Orpheus Contributors"]
+repository = "https://github.com/dougnukem/orpheus"
+homepage = "https://github.com/dougnukem/orpheus"
+description = "Recover lost cryptocurrency from forgotten wallets"
+
+[workspace.dependencies]
+# Crypto — rust-bitcoin ecosystem (v0.32 is current stable as of 2026-04)
+bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
+bip39 = { version = "2.1", features = ["rand"] }
+secp256k1 = { version = "0.29", features = ["global-context", "rand-std"] }
+scrypt = { version = "0.11" }
+aes = "0.8"
+cbc = { version = "0.1", features = ["std"] }
+sha2 = "0.10"
+ripemd = "0.1"
+hmac = "0.12"
+pbkdf2 = "0.12"
+hex = "0.4"
+base58 = "0.2"
+regex = "1.11"
+
+# Runtime / web
+tokio = { version = "1.42", features = ["full"] }
+axum = { version = "0.8", features = ["multipart", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }
+rust-embed = { version = "8.5", features = ["mime-guess"] }
+mime_guess = "2"
+
+# Serde / errors / logging / fs
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+comfy-table = "7.1"
+indicatif = "0.17"
+
+# HTTP client for balance providers
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
