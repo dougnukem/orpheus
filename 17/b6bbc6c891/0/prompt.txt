@@ -1,0 +1,12 @@
+<ide_opened_file>The user opened the file /Users/ddaniels/Dropbox/orpheus/crates/orpheus-core/src/extractors/bitcoin_core.rs in the IDE. This may or may not be related to the current task.</ide_opened_file>
+Does the orpheus-server CLI bundle both the rust API and the react web app.
+
+Can the orpheus CLI bundle both the CLI commands as well as the server/web functionality
+
+---
+
+Just bundle it into the single build/CLI
+
+---
+
+yes
