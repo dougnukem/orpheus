@@ -1,0 +1,269 @@
+# Release — triggered by a v* tag push or manual workflow_dispatch.
+#
+# Flow:
+#   1. create-draft: make a draft GitHub Release and emit its tag name.
+#   2. build-cli (matrix) + build-tauri (matrix): build & upload-artifact.
+#   3. publish: download everything, attach to draft, flip draft -> published
+#      atomically. This is the only step where GitHub flips "latest".
+#
+# Nothing is user-visible until `publish` succeeds — if any matrix job
+# fails, the draft stays a draft and can be retried.
+#
+# All `${{ ... }}` expressions that flow into shell bodies are routed
+# through env: blocks per the workflow-injection guidance.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.1). Must already exist on origin."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-draft:
+    name: create draft release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      release_id: ${{ steps.create.outputs.release_id }}
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      INPUT_TAG: ${{ inputs.tag }}
+      REF_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: resolve tag
+        id: resolve
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          # Sanity check the tag shape — must start with v and contain only
+          # safe characters. Rejects any cleverness in workflow_dispatch input.
+          if [[ ! "$TAG" =~ ^v[0-9A-Za-z._+-]+$ ]]; then
+            echo "::error::invalid tag format: $TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "resolved tag: $TAG"
+
+      - name: verify tag exists on origin
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          git fetch --tags --force
+          git rev-parse --verify "refs/tags/$TAG" >/dev/null
+
+      - name: create draft release
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release already exists; ensuring draft state"
+            gh release edit "$TAG" --draft
+          else
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --generate-notes \
+              --verify-tag
+          fi
+          ID=$(gh release view "$TAG" --json id -q .id)
+          echo "release_id=$ID" >> "$GITHUB_OUTPUT"
+
+  build-cli:
+    name: cli / ${{ matrix.target }}
+    needs: create-draft
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,  os: ubuntu-latest,    label: linux-x86_64,  archive: tar.gz }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, label: linux-aarch64, archive: tar.gz }
+          - { target: x86_64-apple-darwin,       os: macos-13,         label: macos-x86_64,  archive: tar.gz }
+          - { target: aarch64-apple-darwin,      os: macos-latest,     label: macos-aarch64, archive: tar.gz }
+          - { target: x86_64-pc-windows-msvc,    os: windows-latest,   label: windows-x86_64, archive: zip }
+    env:
+      TAG: ${{ needs.create-draft.outputs.tag }}
+      TARGET: ${{ matrix.target }}
+      LABEL: ${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - shell: bash
+        run: rustup target add "$TARGET"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-cli-${{ matrix.target }}
+
+      - shell: bash
+        run: cargo build --release --locked --target "$TARGET" -p orpheus-cli -p orpheus-server
+
+      - name: stage artifact (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          NAME="orpheus-$TAG-$LABEL"
+          mkdir -p "staging/$NAME"
+          cp "target/$TARGET/release/orpheus" "staging/$NAME/"
+          cp "target/$TARGET/release/orpheus-server" "staging/$NAME/"
+          cp README.md LICENSE "staging/$NAME/"
+          ( cd staging && tar -czf "$NAME.tar.gz" "$NAME" )
+          echo "ARTIFACT=$NAME" >> "$GITHUB_ENV"
+
+      - name: stage artifact (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $NAME = "orpheus-$env:TAG-$env:LABEL"
+          New-Item -ItemType Directory -Force -Path "staging/$NAME"
+          Copy-Item "target/$env:TARGET/release/orpheus.exe" "staging/$NAME/"
+          Copy-Item "target/$env:TARGET/release/orpheus-server.exe" "staging/$NAME/"
+          Copy-Item README.md, LICENSE "staging/$NAME/"
+          Compress-Archive -Path "staging/$NAME/*" -DestinationPath "staging/$NAME.zip"
+          "ARTIFACT=$NAME" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: staging/${{ env.ARTIFACT }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  build-tauri:
+    name: tauri / ${{ matrix.name }}
+    needs: create-draft
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-universal, os: macos-latest,   args: "--target universal-apple-darwin", rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin" }
+          - { name: linux-x86_64,    os: ubuntu-22.04,   args: "",                                rust-targets: "" }
+          - { name: windows-x86_64,  os: windows-latest, args: "",                                rust-targets: "" }
+    env:
+      TAG: ${{ needs.create-draft.outputs.tag }}
+      RELEASE_ID: ${{ needs.create-draft.outputs.release_id }}
+      RUST_TARGETS: ${{ matrix.rust-targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - name: add rust targets
+        if: matrix.rust-targets != ''
+        shell: bash
+        run: |
+          IFS=',' read -r -a targets <<< "$RUST_TARGETS"
+          for t in "${targets[@]}"; do rustup target add "$t"; done
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/orpheus-tauri/src-tauri -> target"
+          shared-key: release-tauri-${{ matrix.name }}
+
+      - name: install linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+
+      - run: mise run web:install
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: crates/orpheus-tauri/src-tauri
+          args: ${{ matrix.args }}
+          tagName: ${{ needs.create-draft.outputs.tag }}
+          releaseId: ${{ needs.create-draft.outputs.release_id }}
+          includeUpdaterJson: false
+
+      - name: collect tauri bundles
+        shell: bash
+        run: |
+          mkdir -p tauri-output
+          find crates/orpheus-tauri/src-tauri/target -type f \
+            \( -name "*.dmg" -o -name "*.app.tar.gz" \
+               -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.msi" -o -name "*.exe" \) \
+            -not -path "*/deps/*" -not -path "*/build/*" \
+            -exec cp {} tauri-output/ \;
+          ls -la tauri-output/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.name }}
+          path: tauri-output/*
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    needs: [create-draft, build-cli, build-tauri]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.create-draft.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: list collected artifacts + checksums
+        shell: bash
+        run: |
+          ls -la dist/
+          ( cd dist && shasum -a 256 * > SHA256SUMS ) || true
+          cat dist/SHA256SUMS || true
+
+      - name: attach artifacts + flip to published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "$TAG" dist/* --clobber
+          gh release edit "$TAG" --draft=false --latest

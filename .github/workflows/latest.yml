@@ -1,0 +1,226 @@
+# Latest — continuous pre-release tracking `main`.
+#
+# On every push to main:
+#   1. Build CLI + server binaries across native-runner matrix.
+#   2. Build Tauri desktop bundles via tauri-action.
+#   3. Atomically publish/replace the `latest` PRE-release on GitHub with
+#      every artifact attached. The `latest` release is marked prerelease
+#      so GitHub's "Latest release" pointer never tracks it — that pointer
+#      is reserved for tagged releases created by release.yml.
+#
+# `${{ github.sha }}` etc. are bound into the job via env: blocks and then
+# referenced as shell variables to neutralise any scripting-injection risk.
+
+name: latest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: latest
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  LATEST_TAG: latest
+
+jobs:
+  build-cli:
+    name: cli / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: orpheus-linux-x86_64
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            artifact: orpheus-linux-aarch64
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-13
+            artifact: orpheus-macos-x86_64
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: orpheus-macos-aarch64
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: orpheus-windows-x86_64
+            archive: zip
+    env:
+      TARGET: ${{ matrix.target }}
+      ARTIFACT: ${{ matrix.artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - name: add rust target
+        shell: bash
+        run: rustup target add "$TARGET"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: latest-cli-${{ matrix.target }}
+
+      - name: build release binaries
+        shell: bash
+        run: cargo build --release --locked --target "$TARGET" -p orpheus-cli -p orpheus-server
+
+      - name: stage artifact (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p "staging/$ARTIFACT"
+          cp "target/$TARGET/release/orpheus" "staging/$ARTIFACT/"
+          cp "target/$TARGET/release/orpheus-server" "staging/$ARTIFACT/"
+          cp README.md LICENSE "staging/$ARTIFACT/"
+          ( cd staging && tar -czf "$ARTIFACT.tar.gz" "$ARTIFACT" )
+
+      - name: stage artifact (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "staging/$env:ARTIFACT"
+          Copy-Item "target/$env:TARGET/release/orpheus.exe" "staging/$env:ARTIFACT/"
+          Copy-Item "target/$env:TARGET/release/orpheus-server.exe" "staging/$env:ARTIFACT/"
+          Copy-Item README.md, LICENSE "staging/$env:ARTIFACT/"
+          Compress-Archive -Path "staging/$env:ARTIFACT/*" -DestinationPath "staging/$env:ARTIFACT.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: staging/${{ matrix.artifact }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  build-tauri:
+    name: tauri / ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-universal
+            os: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - name: windows-x86_64
+            os: windows-latest
+            args: ""
+            rust-targets: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - name: add rust targets
+        if: matrix.rust-targets != ''
+        shell: bash
+        env:
+          RUST_TARGETS: ${{ matrix.rust-targets }}
+        run: |
+          IFS=',' read -r -a targets <<< "$RUST_TARGETS"
+          for t in "${targets[@]}"; do rustup target add "$t"; done
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/orpheus-tauri/src-tauri -> target"
+          shared-key: latest-tauri-${{ matrix.name }}
+
+      - name: install linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+
+      - run: mise run web:install
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: crates/orpheus-tauri/src-tauri
+          args: ${{ matrix.args }}
+
+      - name: collect tauri bundles
+        shell: bash
+        run: |
+          mkdir -p tauri-output
+          find crates/orpheus-tauri/src-tauri/target -type f \
+            \( -name "*.dmg" -o -name "*.app.tar.gz" \
+               -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.msi" -o -name "*.exe" \) \
+            -not -path "*/deps/*" -not -path "*/build/*" \
+            -exec cp {} tauri-output/ \;
+          ls -la tauri-output/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.name }}
+          path: tauri-output/*
+          if-no-files-found: error
+
+  publish-latest:
+    name: publish latest pre-release
+    needs: [build-cli, build-tauri]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SHA: ${{ github.sha }}
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: list artifacts
+        run: ls -la dist/
+
+      - name: delete previous latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "$LATEST_TAG" --yes --cleanup-tag || true
+
+      - name: create latest pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.LATEST_TAG }}
+          name: "Latest (main @ ${{ github.sha }})"
+          prerelease: true
+          make_latest: "false"
+          body: |
+            **Rolling pre-release built from `main`.** Do not depend on it for
+            reproducible builds — it changes on every push. For a stable
+            version, use a tagged release.
+
+            - commit: `${{ github.sha }}`
+            - run:    `${{ github.run_id }}`
+          files: dist/*
+          fail_on_unmatched_files: true

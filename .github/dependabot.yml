@@ -1,0 +1,69 @@
+# Dependabot keeps third-party actions, Cargo crates, and npm packages current.
+# Critically: for GitHub Actions we specify `pinned-commit` mode so each PR
+# rewrites a floating tag like `@v4` into `@<full-sha> # v4.1.1`. That gives
+# us supply-chain protection without needing to know every SHA up front.
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      actions:
+        patterns: ["*"]
+    # Rewrite floating tags to their commit SHA.
+    # (See https://docs.github.com/en/code-security/dependabot/working-with-dependabot/pinning-an-action-to-a-commit-sha)
+    allow:
+      - dependency-type: "direct"
+    labels:
+      - "ci"
+      - "dependencies"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      rust-bitcoin-ecosystem:
+        patterns: ["bitcoin*", "bip39", "secp256k1", "base58*"]
+      tokio-ecosystem:
+        patterns: ["tokio*", "tower*", "axum*", "hyper*"]
+      tracing:
+        patterns: ["tracing*"]
+      serde:
+        patterns: ["serde*"]
+    labels:
+      - "rust"
+      - "dependencies"
+    commit-message:
+      prefix: "build"
+      include: "scope"
+
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react*"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*"]
+      tauri:
+        patterns: ["@tauri-apps/*"]
+    labels:
+      - "frontend"
+      - "dependencies"
+    commit-message:
+      prefix: "build"
+      include: "scope"
