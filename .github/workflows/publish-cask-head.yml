@@ -1,0 +1,121 @@
+# Publish Homebrew HEAD cask — called by latest.yml after the rolling
+# `latest` pre-release is atomically replaced on every push to main.
+#
+# Writes `Casks/orpheus-head.rb` to the external tap repo
+# `dougnukem/homebrew-orpheus` so users can
+# `brew install --cask dougnukem/orpheus/orpheus-head` and receive a
+# fresh rolling build with every `brew reinstall --cask orpheus-head`.
+#
+# The head cask uses `version :latest` + `sha256 :no_check` because the
+# artifact hash changes on every push to main. Users opt into this
+# instability explicitly by installing the `-head` variant.
+#
+# Requires:
+#   - HOMEBREW_TAP_TOKEN secret (GitHub PAT with repo scope on the tap)
+#   - the tap repo to already exist (bootstrapped by publish-cask.yml on
+#     the first tagged release). If it does not exist yet this workflow
+#     will fail — run publish-cask.yml first, or create the repo by hand.
+#
+# Security: all ${{ github.* }} inputs are routed through env: blocks and
+# referenced as shell variables. The workflow only uses trusted context
+# values (github.repository, github.sha) — no untrusted event payload.
+
+name: publish-cask-head
+
+on:
+  workflow_call: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-cask-head
+  cancel-in-progress: false
+
+env:
+  TAP_OWNER: dougnukem
+  TAP_REPO: homebrew-orpheus
+  LATEST_TAG: latest
+
+jobs:
+  update-cask-head:
+    name: update homebrew head cask
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.sha }}
+    steps:
+      - name: check HOMEBREW_TAP_TOKEN is set
+        id: gate
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -z "$TAP_TOKEN" ]]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping head cask publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.gate.outputs.skip == 'false'
+        uses: actions/checkout@v4
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: locate universal dmg on latest release
+        id: dmg
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DMG=$(gh release view "$LATEST_TAG" --repo "$REPO" \
+            --json assets --jq '.assets[].name' \
+            | grep -E '^Orpheus_.*_universal\.dmg$' \
+            | head -n1 || true)
+          if [[ -z "$DMG" ]]; then
+            echo "::error::no Orpheus_*_universal.dmg asset on $LATEST_TAG release"
+            exit 1
+          fi
+          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_OWNER }}/${{ env.TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: render head cask from template
+        env:
+          DMG: ${{ steps.dmg.outputs.dmg }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tap/Casks
+          sed \
+            -e "s|%%REPO%%|$REPO|g" \
+            -e "s|%%DMG_FILENAME%%|$DMG|g" \
+            -e "s|%%TAP_OWNER%%|$TAP_OWNER|g" \
+            -e "s|%%TAP_NAME%%|orpheus|g" \
+            packaging/homebrew/orpheus-head.rb.template > tap/Casks/orpheus-head.rb
+          cat tap/Casks/orpheus-head.rb
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: commit + push tap update
+        shell: bash
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "head cask already up to date; nothing to commit"
+            exit 0
+          fi
+          git config user.name "orpheus-release-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add Casks/orpheus-head.rb
+          git commit -m "orpheus-head @ ${SHA:0:7}"
+          git push

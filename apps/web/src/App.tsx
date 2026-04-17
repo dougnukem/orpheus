@@ -50,8 +50,6 @@ export default function App() {
 
         <section className="relative min-h-[60vh]">
           {tab === "scan" && <ScanPanel onScan={setScan} />}
-          {/* legacy placeholder — "extract" tab removed from TabId, replaced in Task 3.1 */}
-          {false && <ExtractPanel onScan={setScan} />}
           {tab === "mnemonic" && (
             <MnemonicPanel
               onKeys={(keys) => {
@@ -166,50 +164,6 @@ function ScanPanel({ onScan }: { onScan: (r: api.ScanReply) => void }) {
         <div className="flex items-center gap-5 pt-1">
           <PrimaryButton type="submit" disabled={status.kind === "busy"}>
             Begin descent
-          </PrimaryButton>
-          <StatusLine status={status} />
-        </div>
-      </form>
-    </article>
-  );
-}
-
-function ExtractPanel({ onScan }: { onScan: (r: api.ScanReply) => void }) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [passwords, setPasswords] = useState("");
-  const { status, setStatus } = useStatus();
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!files.length) {
-      setStatus({ kind: "err", text: "select a wallet file" });
-      return;
-    }
-    setStatus({ kind: "busy", text: "opening…" });
-    try {
-      const body = await api.scan(files, passwords, "blockstream");
-      onScan(body);
-      setStatus({ kind: "ok", text: "done" });
-    } catch (err) {
-      setStatus({ kind: "err", text: (err as Error).message });
-    }
-  };
-
-  return (
-    <article className="panel-enter">
-      <PanelHead
-        num="II"
-        title="Extract a single wallet"
-        lede="For when you know exactly which file holds the key. Same engines as Scan, scoped to one file."
-      />
-      <form onSubmit={onSubmit} className="flex flex-col gap-5">
-        <Dropzone files={files} onChange={setFiles} multiple={false} title="One wallet file" />
-        <Field label="Passwords (one per line, optional)">
-          <TextArea value={passwords} onChange={(e) => setPasswords(e.target.value)} />
-        </Field>
-        <div className="flex items-center gap-5">
-          <PrimaryButton type="submit" disabled={status.kind === "busy"}>
-            Open the vault
           </PrimaryButton>
           <StatusLine status={status} />
         </div>
