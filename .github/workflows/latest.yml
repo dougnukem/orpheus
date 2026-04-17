@@ -250,3 +250,9 @@ jobs:
             ```
           files: dist/*
           fail_on_unmatched_files: true
+
+  publish-cask-head:
+    name: publish head cask
+    needs: [publish-latest]
+    uses: ./.github/workflows/publish-cask-head.yml
+    secrets: inherit

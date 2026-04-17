@@ -1,0 +1,41 @@
+cask "orpheus-head" do
+  version :latest
+  sha256 :no_check
+
+  url "https://github.com/%%REPO%%/releases/download/latest/%%DMG_FILENAME%%",
+      verified: "github.com/%%REPO%%/"
+  name "Orpheus (HEAD)"
+  desc "Recover lost cryptocurrency from forgotten wallets — rolling build from main"
+  homepage "https://github.com/%%REPO%%"
+
+  auto_updates false
+  depends_on macos: ">= :monterey"
+
+  conflicts_with cask: "%%TAP_OWNER%%/%%TAP_NAME%%/orpheus"
+
+  app "Orpheus.app"
+
+  caveats <<~EOS
+    orpheus-head tracks the tip of `main` and is rebuilt on every push.
+    The installed bits change without a version bump. For reproducible
+    builds use `brew install --cask orpheus` instead.
+
+    To pull the newest HEAD build:
+
+      brew reinstall --cask orpheus-head
+
+    Orpheus is not yet signed with an Apple Developer ID. On first
+    launch macOS will block it. To run:
+
+      xattr -cr /Applications/Orpheus.app
+
+    Then open from Applications normally. This caveat will be removed
+    once Apple code signing is in place.
+  EOS
+
+  zap trash: [
+    "~/Library/Application Support/com.orpheus.desktop",
+    "~/Library/Preferences/com.orpheus.desktop.plist",
+    "~/Library/Logs/Orpheus",
+  ]
+end
