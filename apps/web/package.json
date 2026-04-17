@@ -7,8 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "format": "prettier --write .",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
   },
+  "packageManager": "pnpm@9.15.0",
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "class-variance-authority": "^0.7.1",
