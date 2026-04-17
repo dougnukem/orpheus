@@ -33,7 +33,7 @@ between tags.
 
 Format:
 
-```
+```text
 <type>(<scope>)<!>: <short summary>
 
 [optional body]
@@ -64,7 +64,7 @@ A `!` before the colon marks a breaking change. A body footer
 
 ### Examples
 
-```
+```text
 feat(core): add blockchain.com V4 GUID decoder
 fix(cli): treat empty --passwords file as None, not an error
 perf(extractors): skip files over 64 MiB before pattern scan
@@ -82,7 +82,7 @@ into clean sections (Features, Bug Fixes, Performance, …).
 
 When you're ready to cut a release, tag the commit with `vX.Y.Z`:
 
-```
+```bash
 git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
 ```
