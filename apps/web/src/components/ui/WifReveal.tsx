@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 import { copyWithAutoClear } from "@/lib/clipboard";
 
@@ -6,9 +6,29 @@ const CLEAR_AFTER_MS = 20_000;
 
 export function WifReveal({ wif }: { wif: string }) {
   const [revealed, setRevealed] = useState(false);
+  const revealBtnRef = useRef<HTMLButtonElement | null>(null);
+  const hideBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (revealed) {
+      hideBtnRef.current?.focus();
+    } else {
+      revealBtnRef.current?.focus();
+    }
+  }, [revealed]);
+
+  const onCopy = () => {
+    copyWithAutoClear(wif, CLEAR_AFTER_MS).catch((err) => {
+      console.error("WifReveal: copy failed", err);
+    });
+  };
 
   return (
-    <div className="flex items-center gap-3 border border-[var(--color-danger)] rounded-[5px] px-3 py-2 bg-[color-mix(in_srgb,var(--color-danger)_5%,transparent)]">
+    <div
+      role="group"
+      aria-label="Private key (WIF)"
+      className="flex items-center gap-3 border border-[var(--color-danger)] rounded-[5px] px-3 py-2 bg-[color-mix(in_srgb,var(--color-danger)_5%,transparent)]"
+    >
       <span className="text-[var(--color-danger)] text-xs font-semibold tracking-wide">
         WIF
       </span>
@@ -26,18 +46,23 @@ export function WifReveal({ wif }: { wif: string }) {
       )}
       {revealed ? (
         <>
-          <Button
-            variant="secondary"
-            onClick={() => copyWithAutoClear(wif, CLEAR_AFTER_MS)}
-          >
+          <Button variant="secondary" onClick={onCopy}>
             Copy
           </Button>
-          <Button variant="ghost" onClick={() => setRevealed(false)}>
+          <Button
+            ref={hideBtnRef}
+            variant="ghost"
+            onClick={() => setRevealed(false)}
+          >
             Hide
           </Button>
         </>
       ) : (
-        <Button variant="secondary" onClick={() => setRevealed(true)}>
+        <Button
+          ref={revealBtnRef}
+          variant="secondary"
+          onClick={() => setRevealed(true)}
+        >
           Reveal
         </Button>
       )}

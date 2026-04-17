@@ -25,7 +25,7 @@ describe("WifReveal", () => {
 
   it("has an accessible label for the hidden state", () => {
     render(<WifReveal wif="L1abcDEF" />);
-    expect(screen.getByLabelText(/private key/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/private key \(hidden/i)).toBeInTheDocument();
   });
 
   it("reveals the WIF after clicking Reveal", async () => {
@@ -46,5 +46,21 @@ describe("WifReveal", () => {
     await userEvent.click(screen.getByRole("button", { name: /reveal/i }));
     await userEvent.click(screen.getByRole("button", { name: /hide/i }));
     expect(screen.queryByText("L1abcDEF")).not.toBeInTheDocument();
+  });
+
+  it("moves focus to the Hide button after reveal", async () => {
+    render(<WifReveal wif="L1abcDEF" />);
+    await userEvent.click(screen.getByRole("button", { name: /reveal/i }));
+    expect(screen.getByRole("button", { name: /hide/i })).toHaveFocus();
+  });
+
+  it("logs an error when the clipboard write rejects", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    writeText.mockRejectedValueOnce(new Error("denied"));
+    render(<WifReveal wif="L1abcDEF" />);
+    await userEvent.click(screen.getByRole("button", { name: /reveal/i }));
+    await userEvent.click(screen.getByRole("button", { name: /copy/i }));
+    await vi.waitFor(() => expect(err).toHaveBeenCalled());
+    err.mockRestore();
   });
 });
