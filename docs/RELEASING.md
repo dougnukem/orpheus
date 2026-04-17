@@ -36,7 +36,7 @@ The `release.yml` workflow will:
 1. Create a draft GitHub release.
 2. Build CLI + server binaries for 5 targets; build Tauri bundles for
    macOS (universal), Linux x86_64, Windows x86_64.
-3. GPG-sign every artifact and produce a clearsigned `SHA256SUMS`.
+3. GPG-sign every artifact and produce a detached-signed `SHA256SUMS`.
 4. Attach artifacts to the draft and flip it to published + latest.
 5. Publish `orpheus-core`, `orpheus-cli`, `orpheus-server` to crates.io.
 6. Update the Homebrew cask in `dougnukem/homebrew-orpheus`.

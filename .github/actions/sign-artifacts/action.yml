@@ -13,7 +13,7 @@
 #     present in artifacts-dir EXCEPT pre-existing .asc/.sig files and the
 #     SHA256SUMS manifest itself.
 #   • Generates SHA256SUMS covering every non-signature file, then produces
-#     a clearsigned SHA256SUMS.asc alongside it.
+#     a detached SHA256SUMS.asc signature alongside it.
 #
 # This action intentionally fails closed: if signing fails for any file the
 # whole action fails, so we never publish a partially-signed release.
@@ -116,10 +116,13 @@ runs:
             shasum -a 256 "$f"
           done
         } > SHA256SUMS
+        # Detached signature over the plain-text SHA256SUMS file so users
+        # verify with the same command shape as every per-artifact sig:
+        #   gpg --verify SHA256SUMS.asc SHA256SUMS
         gpg --batch --yes --pinentry-mode loopback \
             --passphrase "$GPG_PASSPHRASE" \
             --local-user "$GPG_KEY_ID" \
-            --clearsign --output SHA256SUMS.asc SHA256SUMS
+            --detach-sign --armor --output SHA256SUMS.asc SHA256SUMS
         echo "--- signed artifacts ---"
         ls -la
         echo "--- SHA256SUMS ---"
