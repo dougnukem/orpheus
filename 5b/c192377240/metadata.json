@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "5bc192377240",
+  "strategy": "manual-commit",
+  "branch": "refactor/bundle-server-into-cli",
+  "checkpoints_count": 0,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/5b/c192377240/0/metadata.json",
+      "transcript": "/5b/c192377240/0/full.jsonl",
+      "content_hash": "/5b/c192377240/0/content_hash.txt",
+      "prompt": "/5b/c192377240/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 219944,
+    "cache_read_tokens": 2055644,
+    "output_tokens": 7271,
+    "api_call_count": 10
+  }
+}
