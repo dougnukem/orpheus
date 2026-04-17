@@ -6,7 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
 description = "Orpheus core: wallet extractors, crypto, balance lookup"
+readme = "../../README.md"
+documentation = "https://docs.rs/orpheus-core"
+keywords = ["bitcoin", "wallet", "recovery", "bip39", "crypto"]
+categories = ["cryptography::cryptocurrencies", "command-line-utilities"]
+exclude = ["fixtures/*", "tests/fixtures/*"]
 
 [lints.rust]
 unsafe_code = "forbid"

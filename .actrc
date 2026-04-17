@@ -1,0 +1,15 @@
+# Default flags for `act` in this repo. Committed — team-wide defaults.
+# Personal-only overrides live in `.actrc.local` (gitignored) and are
+# merged by `act` automatically.
+
+# Use the medium image — matches GitHub's ubuntu-latest closely enough for
+# our workflows without the 20GB "full" image pull.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P ubuntu-24.04=catthehacker/ubuntu:act-24.04
+
+# Read secrets from ./.secrets (gitignored).
+--secret-file .secrets
+
+# Don't spam warnings about macOS/Windows runners we can't simulate.
+--quiet

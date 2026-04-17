@@ -6,14 +6,26 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
 description = "Orpheus axum web server that hosts the embedded React app"
+readme = "../../README.md"
+keywords = ["bitcoin", "wallet", "recovery", "server", "axum"]
+categories = ["cryptography::cryptocurrencies", "web-programming::http-server"]
 
 [[bin]]
 name = "orpheus-server"
 path = "src/main.rs"
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/{ version }/orpheus-{ version }-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
+bin-dir = "orpheus-{ version }-{ target }/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
 [dependencies]
-orpheus-core = { path = "../orpheus-core" }
+orpheus-core = { path = "../orpheus-core", version = "0.1.0" }
 anyhow.workspace = true
 axum.workspace = true
 tokio.workspace = true

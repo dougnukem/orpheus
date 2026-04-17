@@ -143,17 +143,7 @@ jobs:
           workspaces: "crates/orpheus-tauri/src-tauri -> target"
           shared-key: latest-tauri-${{ matrix.name }}
 
-      - name: install linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            libssl-dev
+      - uses: ./.github/actions/install-linux-deps
 
       - run: mise run web:install
       - uses: tauri-apps/tauri-action@v0
@@ -203,6 +193,14 @@ jobs:
       - name: list artifacts
         run: ls -la dist/
 
+      - name: sign artifacts with gpg
+        uses: ./.github/actions/sign-artifacts
+        with:
+          artifacts-dir: dist
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+
       - name: delete previous latest release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -222,5 +220,11 @@ jobs:
 
             - commit: `${{ github.sha }}`
             - run:    `${{ github.run_id }}`
+
+            All artifacts are GPG-signed. Verify with:
+            ```
+            gpg --verify SHA256SUMS.asc SHA256SUMS
+            sha256sum -c SHA256SUMS
+            ```
           files: dist/*
           fail_on_unmatched_files: true

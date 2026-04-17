@@ -1,0 +1,81 @@
+# Smoke-test for the sign-artifacts composite action.
+#
+# Creates a couple of dummy files, runs the composite with the real
+# release subkey, then verifies the signatures against the public key
+# committed at packaging/gpg/orpheus-release-pubkey.asc. Guards against
+# silently breaking the signing pipeline.
+#
+# Runs only on-demand (workflow_dispatch). Not part of ci.yml because it
+# needs the release secrets.
+
+name: test-sign-artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: sign + verify dummy artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: create dummy artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          echo "fake linux binary"  > dist/orpheus-test-linux-x86_64.tar.gz
+          echo "fake macos binary" > dist/orpheus-test-macos-aarch64.tar.gz
+          ls -la dist/
+
+      - name: sign with composite action
+        uses: ./.github/actions/sign-artifacts
+        with:
+          artifacts-dir: dist
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+          strict: "true"
+
+      - name: assert expected files were produced
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          for f in orpheus-test-linux-x86_64.tar.gz \
+                   orpheus-test-macos-aarch64.tar.gz; do
+            [[ -s "$f.asc" ]] || { echo "::error::missing/empty signature for $f"; exit 1; }
+          done
+          [[ -s SHA256SUMS     ]] || { echo "::error::missing SHA256SUMS";     exit 1; }
+          [[ -s SHA256SUMS.asc ]] || { echo "::error::missing SHA256SUMS.asc"; exit 1; }
+          echo "::notice::all expected signature files are present"
+
+      - name: verify signatures against the committed public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fresh GNUPGHOME so we aren't relying on the subkey that was
+          # imported by the composite action. This proves the public key
+          # we ship to users actually matches what CI signs with.
+          VERIFY_HOME="$RUNNER_TEMP/verify-gnupg"
+          mkdir -p "$VERIFY_HOME"
+          chmod 700 "$VERIFY_HOME"
+          export GNUPGHOME="$VERIFY_HOME"
+          gpg --batch --import packaging/gpg/orpheus-release-pubkey.asc
+
+          cd dist
+          echo "--- verifying detached signatures ---"
+          for f in *.tar.gz; do
+            echo "verifying: $f"
+            gpg --batch --verify "$f.asc" "$f"
+          done
+
+          echo "--- verifying SHA256SUMS detached sig ---"
+          gpg --batch --verify SHA256SUMS.asc SHA256SUMS
+
+          echo "--- verifying all hashes match ---"
+          sha256sum -c SHA256SUMS

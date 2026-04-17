@@ -1,0 +1,131 @@
+# Publish crates to crates.io — called by release.yml after a tagged
+# release is live on GitHub.
+#
+# Only publishes library + binary crates that have `publish = true`
+# (the default). `orpheus-tauri` and `orpheus-demo-fixtures` are marked
+# `publish = false` and skipped automatically by cargo.
+#
+# Order matters: orpheus-core must publish before orpheus-cli and
+# orpheus-server because those depend on it via path + version. Cargo
+# usually discovers this via `cargo publish --workspace`, but we publish
+# explicitly for predictability and better error reporting.
+
+name: publish-crates
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.1). The crate version must match tag-less."
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.1)."
+        required: true
+        type: string
+      dry_run:
+        description: "If true, run cargo publish --dry-run only."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crates-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: cargo publish
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - name: check CARGO_REGISTRY_TOKEN is set
+        id: gate
+        env:
+          TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -z "$TOKEN" ]]; then
+            echo "::warning::CARGO_REGISTRY_TOKEN not set; skipping crates.io publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.gate.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - if: steps.gate.outputs.skip == 'false'
+        uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+
+      - if: steps.gate.outputs.skip == 'false'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: publish-crates
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: verify crate versions match the tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="${TAG#v}"
+          WORKSPACE_VERSION=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag: $TAG  -> expected crate version: $EXPECTED"
+          echo "workspace version: $WORKSPACE_VERSION"
+          if [[ "$EXPECTED" != "$WORKSPACE_VERSION" ]]; then
+            echo "::error::tag ($EXPECTED) does not match workspace.version ($WORKSPACE_VERSION)"
+            exit 1
+          fi
+
+      - name: cargo publish (dry-run)
+        if: steps.gate.outputs.skip == 'false' && env.DRY_RUN == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for c in orpheus-core orpheus-cli orpheus-server; do
+            echo "=== dry-run: $c ==="
+            cargo publish --dry-run -p "$c"
+          done
+
+      - name: cargo publish (real)
+        if: steps.gate.outputs.skip == 'false' && env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Publish in dependency order. Between crates, pause briefly to let
+          # the crates.io index catch up so dependents can resolve the new
+          # version. `--no-verify` on dependents avoids a redundant full build.
+          publish_one() {
+            local crate=$1
+            shift
+            echo "=== publishing: $crate ==="
+            # Allow failure only for the specific "already uploaded" case so
+            # re-runs are idempotent.
+            if ! cargo publish -p "$crate" "$@"; then
+              if cargo search "$crate" | grep -q "^$crate = \"${TAG#v}\""; then
+                echo "$crate@${TAG#v} already on crates.io; skipping"
+                return 0
+              fi
+              return 1
+            fi
+          }
+          publish_one orpheus-core
+          # Give crates.io a moment to index the new version.
+          sleep 30
+          publish_one orpheus-cli --no-verify
+          publish_one orpheus-server --no-verify

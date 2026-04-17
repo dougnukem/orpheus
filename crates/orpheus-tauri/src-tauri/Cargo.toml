@@ -7,6 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Orpheus Tauri v2 desktop application"
+publish = false
 
 [lib]
 name = "orpheus_tauri_lib"
