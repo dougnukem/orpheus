@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "126ed254fb92",
+  "strategy": "manual-commit",
+  "branch": "feat/cask-head-publish",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/latest.yml",
+    ".github/workflows/publish-cask-head.yml",
+    "packaging/homebrew/README.md",
+    "packaging/homebrew/orpheus-head.rb.template"
+  ],
+  "sessions": [
+    {
+      "metadata": "/12/6ed254fb92/0/metadata.json",
+      "transcript": "/12/6ed254fb92/0/full.jsonl",
+      "content_hash": "/12/6ed254fb92/0/content_hash.txt",
+      "prompt": "/12/6ed254fb92/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 58,
+    "cache_creation_tokens": 111191,
+    "cache_read_tokens": 2159845,
+    "output_tokens": 20045,
+    "api_call_count": 33
+  }
+}
