@@ -40,6 +40,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: lint
+      # `mise run lint` triggers `cargo clippy --workspace --all-targets`, and
+      # orpheus-tauri's transitive deps (gdk-sys/atk-sys/webkit2gtk-sys) link
+      # against the same Linux packages the test job installs.
+      - uses: ./.github/actions/install-linux-deps
       - run: mise run lint
 
   rust-test:
@@ -59,17 +63,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: test-${{ matrix.os }}
-      - name: install linux deps (tauri)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            libssl-dev
+      - uses: ./.github/actions/install-linux-deps
       - run: mise run test
 
   web-lint-build:

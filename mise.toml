@@ -16,8 +16,12 @@ pnpm = "9"
 # users need libwebkit2gtk-4.1-dev + friends (see .github/workflows/ci.yml).
 
 [env]
-# rustup-managed toolchain always wins over /opt/homebrew/bin/{cargo,rustc}
-_.path = ["{{ env.HOME }}/.cargo/bin"]
+# rustup-managed toolchain always wins over /opt/homebrew/bin/{cargo,rustc}.
+# Windows CI runners don't set $HOME — fall back to %USERPROFILE% there so
+# mise can still render the template.
+_.path = [
+    "{% if env.HOME %}{{ env.HOME }}/.cargo/bin{% elif env.USERPROFILE %}{{ env.USERPROFILE }}/.cargo/bin{% else %}{{ config_root }}/.cargo/bin{% endif %}",
+]
 RUST_BACKTRACE = "1"
 RUST_LOG       = "orpheus=info,tower_http=info"
 
@@ -100,11 +104,13 @@ run = "pnpm build"
 
 [tasks."web:lint"]
 description = "Run ESLint on the frontend"
+depends = ["web:install"]
 dir = "apps/web"
 run = "pnpm lint"
 
 [tasks."web:typecheck"]
 description = "Run the TS compiler without emitting"
+depends = ["web:install"]
 dir = "apps/web"
 run = "pnpm typecheck"
 
