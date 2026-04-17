@@ -1,24 +1,28 @@
-# Publish Homebrew HEAD cask — called by latest.yml after the rolling
-# `latest` pre-release is atomically replaced on every push to main.
+# Publish Homebrew HEAD artifacts — called by latest.yml after the
+# rolling `latest` pre-release is atomically replaced on every push to
+# main. Writes two files to the external tap `dougnukem/homebrew-orpheus`:
 #
-# Writes `Casks/orpheus-head.rb` to the external tap repo
-# `dougnukem/homebrew-orpheus` so users can
-# `brew install --cask dougnukem/orpheus/orpheus-head` and receive a
-# fresh rolling build with every `brew reinstall --cask orpheus-head`.
+#   - Casks/orpheus-head-app.rb — desktop .app (GUI + bundled CLI)
+#   - Formula/orpheus-head.rb    — CLI-only formula (Linux + macOS)
 #
-# The head cask uses `version :latest` + `sha256 :no_check` because the
-# artifact hash changes on every push to main. Users opt into this
-# instability explicitly by installing the `-head` variant.
+# Also removes the legacy `Casks/orpheus-head.rb` file from the earlier
+# single-cask layout so `brew install --cask orpheus-head` no longer
+# resolves; the replacement is `orpheus-head-app`.
+#
+# Versioning:
+#   - The cask uses `version :latest` + `sha256 :no_check`; users
+#     `brew reinstall --cask orpheus-head-app` to pull fresh builds.
+#   - The formula pins a concrete sha256 per platform (Homebrew formulas
+#     reject :no_check). The version string encodes the short SHA so
+#     each publish mints a fresh formula revision.
 #
 # Requires:
 #   - HOMEBREW_TAP_TOKEN secret (GitHub PAT with repo scope on the tap)
-#   - the tap repo to already exist (bootstrapped by publish-cask.yml on
-#     the first tagged release). If it does not exist yet this workflow
-#     will fail — run publish-cask.yml first, or create the repo by hand.
+#   - the tap repo to already exist (bootstrapped by publish-cask.yml).
 #
-# Security: all ${{ github.* }} inputs are routed through env: blocks and
-# referenced as shell variables. The workflow only uses trusted context
-# values (github.repository, github.sha) — no untrusted event payload.
+# Security: all ${{ github.* }} inputs are routed through env: blocks
+# and referenced as shell variables. The workflow only uses trusted
+# context values (github.repository, github.sha) — no untrusted payload.
 
 name: publish-cask-head
 
@@ -36,11 +40,12 @@ concurrency:
 env:
   TAP_OWNER: dougnukem
   TAP_REPO: homebrew-orpheus
+  TAP_NAME: orpheus
   LATEST_TAG: latest
 
 jobs:
-  update-cask-head:
-    name: update homebrew head cask
+  update-tap-head:
+    name: update homebrew head cask + formula
     runs-on: ubuntu-latest
     env:
       REPO: ${{ github.repository }}
@@ -53,7 +58,7 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$TAP_TOKEN" ]]; then
-            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping head cask publish"
+            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping head publish"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -81,6 +86,53 @@ jobs:
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
 
       - if: steps.gate.outputs.skip == 'false'
+        name: fetch CLI tarballs and compute sha256s
+        id: tarballs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/$REPO/releases/download/$LATEST_TAG"
+          TMP=$(mktemp -d)
+          fetch_sha() {
+            local name=$1
+            if curl -sfL -o "$TMP/$name" "$BASE/$name"; then
+              sha256sum "$TMP/$name" | cut -d' ' -f1
+            else
+              echo "::error::failed to download $name from $LATEST_TAG release"
+              exit 1
+            fi
+          }
+          MACOS_ARM_SHA=$(fetch_sha "orpheus-macos-aarch64.tar.gz")
+          MACOS_INTEL_SHA=$(fetch_sha "orpheus-macos-x86_64.tar.gz")
+          LINUX_ARM_SHA=$(fetch_sha "orpheus-linux-aarch64.tar.gz")
+          LINUX_INTEL_SHA=$(fetch_sha "orpheus-linux-x86_64.tar.gz")
+          {
+            echo "macos_arm=$MACOS_ARM_SHA"
+            echo "macos_intel=$MACOS_INTEL_SHA"
+            echo "linux_arm=$LINUX_ARM_SHA"
+            echo "linux_intel=$LINUX_INTEL_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: derive formula version from workspace + sha
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pick up the workspace base version so the formula tracks
+          # Cargo.toml without manual edits. `VERSION.gSHA7` is a valid
+          # Homebrew version string — the `.gSHA` suffix sorts
+          # monotonically across builds of the same base.
+          BASE=$(grep -m1 '^version *= *"' Cargo.toml | cut -d'"' -f2)
+          if [[ -z "$BASE" ]]; then
+            echo "::error::could not parse workspace version from Cargo.toml"
+            exit 1
+          fi
+          echo "version=${BASE}.g${SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.gate.outputs.skip == 'false'
         name: checkout tap repo
         uses: actions/checkout@v4
         with:
@@ -100,9 +152,44 @@ jobs:
             -e "s|%%REPO%%|$REPO|g" \
             -e "s|%%DMG_FILENAME%%|$DMG|g" \
             -e "s|%%TAP_OWNER%%|$TAP_OWNER|g" \
-            -e "s|%%TAP_NAME%%|orpheus|g" \
-            packaging/homebrew/orpheus-head.rb.template > tap/Casks/orpheus-head.rb
-          cat tap/Casks/orpheus-head.rb
+            -e "s|%%TAP_NAME%%|$TAP_NAME|g" \
+            packaging/homebrew/orpheus-head-app.rb.template > tap/Casks/orpheus-head-app.rb
+          cat tap/Casks/orpheus-head-app.rb
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: render head formula from template
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          MACOS_ARM_SHA: ${{ steps.tarballs.outputs.macos_arm }}
+          MACOS_INTEL_SHA: ${{ steps.tarballs.outputs.macos_intel }}
+          LINUX_ARM_SHA: ${{ steps.tarballs.outputs.linux_arm }}
+          LINUX_INTEL_SHA: ${{ steps.tarballs.outputs.linux_intel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tap/Formula
+          sed \
+            -e "s|%%REPO%%|$REPO|g" \
+            -e "s|%%VERSION%%|$VERSION|g" \
+            -e "s|%%MACOS_ARM_SHA%%|$MACOS_ARM_SHA|g" \
+            -e "s|%%MACOS_INTEL_SHA%%|$MACOS_INTEL_SHA|g" \
+            -e "s|%%LINUX_ARM_SHA%%|$LINUX_ARM_SHA|g" \
+            -e "s|%%LINUX_INTEL_SHA%%|$LINUX_INTEL_SHA|g" \
+            -e "s|%%TAP_OWNER%%|$TAP_OWNER|g" \
+            -e "s|%%TAP_NAME%%|$TAP_NAME|g" \
+            packaging/homebrew/orpheus-head.rb.formula.template > tap/Formula/orpheus-head.rb
+          cat tap/Formula/orpheus-head.rb
+
+      - if: steps.gate.outputs.skip == 'false'
+        name: remove legacy orpheus-head cask if present
+        shell: bash
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          if [[ -f Casks/orpheus-head.rb ]]; then
+            git rm Casks/orpheus-head.rb
+            echo "removed legacy Casks/orpheus-head.rb"
+          fi
 
       - if: steps.gate.outputs.skip == 'false'
         name: commit + push tap update
@@ -112,12 +199,12 @@ jobs:
           set -euo pipefail
           git config user.name "orpheus-release-bot"
           git config user.email "bot@users.noreply.github.com"
-          # Stage first so a previously-untracked file registers as a
-          # change; then diff against the index. `git diff --quiet` on
-          # its own misses new files and silently exits clean.
-          git add Casks/orpheus-head.rb
+          # Stage first so newly-created Formula/ + renamed cask register
+          # as changes; then diff against the index. `git diff --quiet`
+          # on its own misses new files and silently exits clean.
+          git add Casks/orpheus-head-app.rb Formula/orpheus-head.rb
           if git diff --cached --quiet; then
-            echo "head cask already up to date; nothing to commit"
+            echo "tap already up to date; nothing to commit"
             exit 0
           fi
           git commit -m "orpheus-head @ ${SHA:0:7}"
