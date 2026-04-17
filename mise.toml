@@ -74,10 +74,8 @@ run = "cargo install --path crates/orpheus-cli --locked --force && cargo install
 
 [tasks.test]
 description = "Run all Rust tests"
-# orpheus-tauri has no tests of its own, and its tauri-build step requires
-# platform-specific icons (e.g. icons/icon.ico on Windows) that aren't
-# checked in yet. clippy --workspace still compile-checks it, and latest.yml
-# handles the full tauri build for releases.
+# orpheus-tauri has no tests of its own. clippy --workspace compile-checks
+# it and latest.yml handles the full tauri build for releases.
 run = "cargo test --workspace --locked --exclude orpheus-tauri"
 
 [tasks."test:core"]

@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.orpheus.desktop",
   "build": {
-    "beforeDevCommand": "cd ../../../apps/web && pnpm dev",
-    "beforeBuildCommand": "cd ../../../apps/web && pnpm build",
+    "beforeDevCommand": "cd ../../apps/web && pnpm dev",
+    "beforeBuildCommand": "cd ../../apps/web && pnpm build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../../../apps/web/dist"
   },
@@ -27,5 +27,16 @@
       "csp": "default-src 'self' ipc: https://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' ipc: https://ipc.localhost"
     }
   },
-  "plugins": {}
+  "plugins": {},
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
 }
