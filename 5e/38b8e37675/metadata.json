@@ -3,7 +3,7 @@
   "checkpoint_id": "5e38b8e37675",
   "strategy": "manual-commit",
   "branch": "feat/balance-received-sent",
-  "checkpoints_count": 0,
+  "checkpoints_count": 3,
   "files_touched": [
     "crates/orpheus-core/src/balance.rs",
     "crates/orpheus-core/src/extractors/bip39_mnemonic.rs",
@@ -20,13 +20,19 @@
       "transcript": "/5e/38b8e37675/0/full.jsonl",
       "content_hash": "/5e/38b8e37675/0/content_hash.txt",
       "prompt": "/5e/38b8e37675/0/prompt.txt"
+    },
+    {
+      "metadata": "/5e/38b8e37675/1/metadata.json",
+      "transcript": "/5e/38b8e37675/1/full.jsonl",
+      "content_hash": "/5e/38b8e37675/1/content_hash.txt",
+      "prompt": "/5e/38b8e37675/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 36,
-    "cache_creation_tokens": 126695,
-    "cache_read_tokens": 1649743,
-    "output_tokens": 22598,
-    "api_call_count": 21
+    "input_tokens": 726,
+    "cache_creation_tokens": 240209,
+    "cache_read_tokens": 2567588,
+    "output_tokens": 34528,
+    "api_call_count": 36
   }
 }
