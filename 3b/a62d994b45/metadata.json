@@ -5,7 +5,43 @@
   "branch": "main",
   "checkpoints_count": 1,
   "files_touched": [
-    "docs/superpowers/plans/2026-04-17-rust-desktop-rewrite.md"
+    ".entire/logs/entire.log",
+    ".githooks/pre-commit",
+    ".gitignore",
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/orpheus-cli/Cargo.toml",
+    "crates/orpheus-cli/src/main.rs",
+    "crates/orpheus-core/Cargo.toml",
+    "crates/orpheus-core/src/balance.rs",
+    "crates/orpheus-core/src/crypto.rs",
+    "crates/orpheus-core/src/extractors/bip39_mnemonic.rs",
+    "crates/orpheus-core/src/extractors/bitcoin_core.rs",
+    "crates/orpheus-core/src/extractors/blockchain_com.rs",
+    "crates/orpheus-core/src/extractors/encrypted.rs",
+    "crates/orpheus-core/src/extractors/mod.rs",
+    "crates/orpheus-core/src/extractors/multibit.rs",
+    "crates/orpheus-core/src/extractors/wallet_dump.rs",
+    "crates/orpheus-core/src/lib.rs",
+    "crates/orpheus-core/src/models.rs",
+    "crates/orpheus-core/src/scanner.rs",
+    "crates/orpheus-demo-fixtures/Cargo.toml",
+    "crates/orpheus-demo-fixtures/src/main.rs",
+    "crates/orpheus-server/Cargo.toml",
+    "crates/orpheus-server/src/main.rs",
+    "crates/orpheus-tauri/src-tauri/Cargo.toml",
+    "crates/orpheus-tauri/src-tauri/src/lib.rs",
+    "crates/orpheus-tauri/src-tauri/src/main.rs",
+    "docs/superpowers/plans/2026-04-17-rust-desktop-rewrite.md",
+    "fixtures/README.md",
+    "fixtures/demo-wallets/demo_bitcoin_core.wallet.dat",
+    "fixtures/demo-wallets/demo_descriptor_dump.json",
+    "fixtures/demo-wallets/demo_multibit.wallet",
+    "fixtures/demo-wallets/demo_multibit_protected.wallet",
+    "fixtures/demo-wallets/demo_seed.txt",
+    "fixtures/mock_balances.json",
+    "mise.toml",
+    "rust-toolchain.toml"
   ],
   "sessions": [
     {
@@ -17,10 +53,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 24,
-    "cache_creation_tokens": 35870,
-    "cache_read_tokens": 758293,
-    "output_tokens": 31516,
-    "api_call_count": 10
+    "input_tokens": 39,
+    "cache_creation_tokens": 93028,
+    "cache_read_tokens": 1177888,
+    "output_tokens": 41547,
+    "api_call_count": 20
   }
 }
