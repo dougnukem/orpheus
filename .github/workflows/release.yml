@@ -54,7 +54,7 @@ jobs:
       INPUT_TAG: ${{ inputs.tag }}
       REF_NAME: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -122,8 +122,8 @@ jobs:
       TARGET: ${{ matrix.target }}
       LABEL: ${{ matrix.label }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
@@ -161,7 +161,6 @@ jobs:
           Compress-Archive -Path "staging/$NAME/*" -DestinationPath "staging/$NAME.zip"
           "ARTIFACT=$NAME" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      # ------------------------------------------------------------------
       # Placeholder: Windows binary signing via SignPath Foundation.
       # Enable once a SignPath project is approved (free for OSS). Requires
       # secrets.SIGNPATH_API_TOKEN + vars.SIGNPATH_ORG_ID + a project and
@@ -178,9 +177,7 @@ jobs:
       #     github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
       #     wait-for-completion: true
       #     output-artifact-directory: staging/
-      # ------------------------------------------------------------------
 
-      # ------------------------------------------------------------------
       # Placeholder: macOS CLI binary signing + notarization via Apple
       # Developer ID. Enable once APPLE_* secrets are configured. Tauri
       # bundles are signed separately via tauri-action.
@@ -195,10 +192,11 @@ jobs:
       #     security create-keychain -p "" "$KEYCHAIN_PATH"
       #     security default-keychain -s "$KEYCHAIN_PATH"
       #     security unlock-keychain -p "" "$KEYCHAIN_PATH"
-      #     echo "$APPLE_CERTIFICATE" | base64 -d > cert.p12
-      #     security import cert.p12 -k "$KEYCHAIN_PATH" \
+      #     TMP_CERT="$RUNNER_TEMP/cert.p12"
+      #     printf '%s' "$APPLE_CERTIFICATE" | base64 -d > "$TMP_CERT"
+      #     security import "$TMP_CERT" -k "$KEYCHAIN_PATH" \
       #       -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-      #     rm -f cert.p12
+      #     rm -f "$TMP_CERT"
       #
       # - name: codesign + notarize mac cli tarball
       #   if: runner.os == 'macOS'
@@ -215,9 +213,8 @@ jobs:
       #     xcrun notarytool submit "staging/$ARTIFACT.tar.gz" \
       #       --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" \
       #       --issuer "$APPLE_API_ISSUER" --wait
-      # ------------------------------------------------------------------
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         id: upload
         with:
           name: ${{ env.ARTIFACT }}
@@ -240,8 +237,8 @@ jobs:
       RELEASE_ID: ${{ needs.create-draft.outputs.release_id }}
       RUST_TARGETS: ${{ matrix.rust-targets }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
@@ -298,13 +295,11 @@ jobs:
             -exec cp {} tauri-output/ \;
           ls -la tauri-output/
 
-      # ------------------------------------------------------------------
       # Placeholder: sign Windows MSI/EXE via SignPath (see build-cli).
       # When enabled, submit tauri-output/* to SignPath and overwrite with
       # signed versions before upload-artifact below.
-      # ------------------------------------------------------------------
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tauri-${{ matrix.name }}
           path: tauri-output/*
@@ -319,11 +314,11 @@ jobs:
     env:
       TAG: ${{ needs.create-draft.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
