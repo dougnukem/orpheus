@@ -40,5 +40,13 @@ for TRIPLE in "$@"; do
   DST="$OUT_DIR/orpheus-$TRIPLE$EXT"
 
   cp "$SRC" "$DST"
+  # `cp` preserves mode on macOS/Linux, but Dropbox and similar file-sync
+  # tools silently strip the executable bit on files under their watch.
+  # Tauri's bundler copies externalBin resources bit-for-bit into
+  # `Orpheus.app/Contents/MacOS/`, so a non-executable source leaks into
+  # the installed bundle and the Homebrew cask `binary` stanza ends up
+  # symlinking an unrunnable file onto $PATH. Force +x here so the staged
+  # source is always executable before Tauri sees it.
+  chmod +x "$DST"
   echo "    staged $DST"
 done
