@@ -76,17 +76,28 @@ done
 UID_FULL="$UID_NAME <$UID_EMAIL>"
 
 # --- preflight -----------------------------------------------------------
+echo "[setup-gpg] starting preflight..."
 command -v gpg >/dev/null || { echo "gpg not found on PATH" >&2; exit 1; }
+echo "[setup-gpg]   gpg:  $(command -v gpg)"
 if [[ $DO_GH -eq 1 ]]; then
   command -v gh >/dev/null || { echo "gh (github cli) not found on PATH" >&2; exit 1; }
-  gh auth status >/dev/null 2>&1 || { echo "gh is not authenticated; run 'gh auth login'" >&2; exit 1; }
+  echo "[setup-gpg]   gh:   $(command -v gh)"
+  if ! gh auth status 2>&1 | tail -5; then
+    echo "gh is not authenticated; run 'gh auth login'" >&2
+    exit 1
+  fi
 fi
 
 # Reject running from outside the repo root (pubkey + .secrets paths are relative).
+echo "[setup-gpg]   cwd:  $(pwd)"
 [[ -f Cargo.toml && -f README.md ]] || {
-  echo "run this from the orpheus repo root" >&2; exit 1; }
+  echo "run this from the orpheus repo root (missing Cargo.toml or README.md)" >&2
+  exit 1
+}
+echo "[setup-gpg] preflight ok"
 
 # --- existing-key guard --------------------------------------------------
+echo "[setup-gpg] checking for existing key at $UID_EMAIL..."
 existing_fp=$(gpg --list-secret-keys --with-colons "$UID_EMAIL" 2>/dev/null \
   | awk -F: '$1 == "fpr" { print $10; exit }')
 
@@ -111,6 +122,9 @@ EOF
   gpg --batch --yes --delete-secret-keys "$existing_fp"
   gpg --batch --yes --delete-keys "$existing_fp"
 fi
+
+echo "[setup-gpg] no conflicting key — ready to prompt for passphrase."
+echo
 
 # --- passphrase prompt ---------------------------------------------------
 prompt_passphrase() {
