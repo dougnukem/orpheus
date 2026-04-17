@@ -10,6 +10,12 @@ const variants: Record<Variant, string> = {
     "border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)]",
 };
 
+const roles: Record<Variant, "status" | "alert"> = {
+  info: "status",
+  warn: "alert",
+  danger: "alert",
+};
+
 export function Banner({
   variant = "info",
   className,
@@ -17,7 +23,7 @@ export function Banner({
 }: PropsWithChildren<{ variant?: Variant; className?: string }>) {
   return (
     <div
-      role="note"
+      role={roles[variant]}
       className={cn(
         "border rounded-[5px] px-4 py-3 text-sm text-[var(--color-text)]",
         variants[variant],

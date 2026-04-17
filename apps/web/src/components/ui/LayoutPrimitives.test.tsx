@@ -60,4 +60,17 @@ describe("Banner", () => {
     const { container } = render(<Banner variant="danger">oh no</Banner>);
     expect(container.firstChild).toHaveClass("border-[var(--color-danger)]");
   });
+
+  it("uses role=status for info variant", () => {
+    render(<Banner variant="info">fyi</Banner>);
+    expect(screen.getByRole("status")).toHaveTextContent("fyi");
+  });
+
+  it("uses role=alert for warn and danger variants", () => {
+    const { unmount } = render(<Banner variant="warn">heads up</Banner>);
+    expect(screen.getByRole("alert")).toHaveTextContent("heads up");
+    unmount();
+    render(<Banner variant="danger">oh no</Banner>);
+    expect(screen.getByRole("alert")).toHaveTextContent("oh no");
+  });
 });
