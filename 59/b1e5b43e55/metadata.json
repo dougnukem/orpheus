@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "59b1e5b43e55",
+  "strategy": "manual-commit",
+  "branch": "fix/tauri-build",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "crates/orpheus-tauri/src-tauri/tauri.conf.json",
+    "mise.toml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/59/b1e5b43e55/0/metadata.json",
+      "transcript": "/59/b1e5b43e55/0/full.jsonl",
+      "content_hash": "/59/b1e5b43e55/0/content_hash.txt",
+      "prompt": "/59/b1e5b43e55/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 150,
+    "cache_creation_tokens": 146135,
+    "cache_read_tokens": 5411545,
+    "output_tokens": 33355,
+    "api_call_count": 71
+  }
+}

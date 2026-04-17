@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "59b1e5b43e55",
+  "session_id": "7c377994-745d-4fc1-b70b-c234d0e85062",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T09:42:25.173066Z",
+  "branch": "fix/tauri-build",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "crates/orpheus-tauri/src-tauri/tauri.conf.json",
+    "mise.toml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b4ec1b9f124e",
+  "token_usage": {
+    "input_tokens": 150,
+    "cache_creation_tokens": 146135,
+    "cache_read_tokens": 5411545,
+    "output_tokens": 33355,
+    "api_call_count": 71
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T09:42:25.149951Z",
+    "agent_lines": 16,
+    "agent_removed": 7,
+    "human_added": 135,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 151,
+    "total_lines_changed": 158,
+    "agent_percentage": 14.556962025316455,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
