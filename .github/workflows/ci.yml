@@ -1,0 +1,122 @@
+# CI — runs on every pull-request and on every push to main.
+#
+# Local and CI share the same task definitions via mise (see mise.toml).
+# Running `mise run ci` locally reproduces exactly what this workflow does.
+#
+# All third-party actions are pinned to floating major tags here for
+# readability. .github/dependabot.yml rewrites them to full commit SHAs on
+# its first weekly pass — that is our supply-chain baseline.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  rust-lint:
+    name: rust / lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+      - run: mise run lint
+
+  rust-test:
+    name: rust / test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test-${{ matrix.os }}
+      - name: install linux deps (tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev
+      - run: mise run test
+
+  web-lint-build:
+    name: web / lint + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - run: mise run web:install
+      - run: mise run web:lint
+      - run: mise run web:typecheck
+      - run: mise run web:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  demo-smoke:
+    name: cli / demo smoke-test
+    runs-on: ubuntu-latest
+    needs: [rust-lint]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: demo
+      - run: mise run demo:fixtures
+      - name: run offline demo + assert homage balance
+        run: |
+          mise run cli:demo | tee demo.out
+          grep -q "wallet(s)" demo.out
+          grep -q "0.03865052" demo.out
+
+  all-green:
+    name: all green
+    runs-on: ubuntu-latest
+    needs: [rust-lint, rust-test, web-lint-build, demo-smoke]
+    steps:
+      - run: echo "everything passed"
