@@ -6,7 +6,7 @@ import { Dropzone } from "@/components/Dropzone";
 import { Field, FieldLabel, PrimaryButton, Select, TextArea, TextInput } from "@/components/Field";
 import { ResultsView } from "@/components/ResultsView";
 import * as api from "@/lib/api";
-import type { DecodedMnemonic, ExtractedKey, TabId, WalletScanResult } from "@/types";
+import type { DecodedMnemonic, ExtractedKey, Provider, TabId, WalletScanResult } from "@/types";
 import { cn } from "@/lib/utils";
 
 const VERSION = "0.1.0";
@@ -44,7 +44,8 @@ export default function App() {
 
         <section className="relative min-h-[60vh]">
           {tab === "scan" && <ScanPanel onResults={(r) => { setResults(r); setTab("results"); }} />}
-          {tab === "extract" && (
+          {/* legacy placeholder — "extract" tab removed from TabId, replaced in Task 3.1 */}
+          {false && (
             <ExtractPanel onResults={(r) => { setResults(r); setTab("results"); }} />
           )}
           {tab === "mnemonic" && (
@@ -107,7 +108,7 @@ function StatusLine({ status }: { status: Status }) {
 function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [passwords, setPasswords] = useState("");
-  const [provider, setProvider] = useState("blockstream");
+  const [provider, setProvider] = useState<Provider>("blockstream");
   const { status, setStatus } = useStatus();
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -142,7 +143,7 @@ function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }
         <Dropzone files={files} onChange={setFiles} />
         <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
           <Field label="Balance provider">
-            <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <Select value={provider} onChange={(e) => setProvider(e.target.value as Provider)}>
               <option value="blockstream">blockstream.info (default)</option>
               <option value="blockchain">blockchain.info</option>
               <option value="mock">mock (offline)</option>
