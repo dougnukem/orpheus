@@ -27,12 +27,24 @@ describe("Header", () => {
     );
   });
 
-  it("shows a grey 'offline' option for mock/none providers", () => {
+  it("shows a grey dot for mock/none providers", () => {
     render(
       <MemoryRouter initialEntries={["/scan"]}>
         <Header provider="none" onProviderChange={() => {}} />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/offline/i)).toBeInTheDocument();
+    expect(screen.getByTestId("provider-dot")).toHaveClass(
+      "bg-[var(--color-text-faint)]",
+    );
+  });
+
+  it("renders 'offline' labels for both mock and none options", () => {
+    render(
+      <MemoryRouter initialEntries={["/scan"]}>
+        <Header provider="none" onProviderChange={() => {}} />
+      </MemoryRouter>,
+    );
+    const offlineLabels = screen.getAllByText(/offline/i);
+    expect(offlineLabels.length).toBeGreaterThanOrEqual(2);
   });
 });
