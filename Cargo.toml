@@ -3,7 +3,6 @@ resolver = "3"
 members = [
     "crates/orpheus-core",
     "crates/orpheus-cli",
-    "crates/orpheus-server",
     "crates/orpheus-tauri/src-tauri",
     "crates/orpheus-demo-fixtures",
 ]

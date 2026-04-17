@@ -1,4 +1,5 @@
-//! Orpheus axum server — hosts the embedded React UI and JSON API.
+//! `orpheus serve` — axum web server that hosts the embedded React UI
+//! and the JSON API.
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
@@ -10,7 +11,6 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use clap::Parser;
 use orpheus_core::{
     ScanSummary, WalletScanResult,
     balance::{BalanceProvider, MockProvider, ProviderKind, provider_from_kind},
@@ -23,21 +23,11 @@ use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
-#[derive(Parser)]
-#[command(name = "orpheus-server", version)]
-struct Args {
-    /// Bind address
-    #[arg(long, default_value = "127.0.0.1")]
-    host: String,
-    /// Port
-    #[arg(long, default_value_t = 3000)]
-    port: u16,
-    /// Path to mock_balances.json
-    #[arg(long)]
-    mock_file: Option<PathBuf>,
-    /// Path to the demo wallet fixtures directory
-    #[arg(long)]
-    demo_dir: Option<PathBuf>,
+pub struct ServeArgs {
+    pub host: String,
+    pub port: u16,
+    pub mock_file: Option<PathBuf>,
+    pub demo_dir: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -50,16 +40,7 @@ struct AppState {
 #[folder = "../../apps/web/dist"]
 struct Assets;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
-    let args = Args::parse();
+pub async fn run(args: ServeArgs) -> Result<()> {
     let workspace_root = workspace_root();
     let state = AppState {
         demo_dir: args
@@ -87,7 +68,7 @@ async fn main() -> Result<()> {
             addr
         );
     }
-    info!("orpheus-server listening on http://{addr}");
+    info!("orpheus serve listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())

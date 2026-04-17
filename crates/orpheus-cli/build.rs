@@ -1,6 +1,6 @@
 //! Ensure the embedded web asset directory exists at compile time.
 //!
-//! `src/main.rs` uses `#[derive(RustEmbed)]` with `#[folder = "../../apps/web/dist"]`.
+//! `src/serve.rs` uses `#[derive(RustEmbed)]` with `#[folder = "../../apps/web/dist"]`.
 //! rust-embed refuses to compile if that directory is missing, which breaks
 //! `cargo test` on any checkout that hasn't run `mise run web:build` yet.
 //! Creating an empty placeholder here lets rust crates build standalone; the

@@ -79,9 +79,9 @@ jobs:
         with:
           shared-key: latest-cli-${{ matrix.target }}
 
-      - name: build release binaries
+      - name: build release binary
         shell: bash
-        run: cargo build --release --locked --target "$TARGET" -p orpheus-cli -p orpheus-server
+        run: cargo build --release --locked --target "$TARGET" -p orpheus-cli
 
       - name: stage artifact (unix)
         if: runner.os != 'Windows'
@@ -89,7 +89,6 @@ jobs:
         run: |
           mkdir -p "staging/$ARTIFACT"
           cp "target/$TARGET/release/orpheus" "staging/$ARTIFACT/"
-          cp "target/$TARGET/release/orpheus-server" "staging/$ARTIFACT/"
           cp README.md LICENSE "staging/$ARTIFACT/"
           ( cd staging && tar -czf "$ARTIFACT.tar.gz" "$ARTIFACT" )
 
@@ -99,7 +98,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "staging/$env:ARTIFACT"
           Copy-Item "target/$env:TARGET/release/orpheus.exe" "staging/$env:ARTIFACT/"
-          Copy-Item "target/$env:TARGET/release/orpheus-server.exe" "staging/$env:ARTIFACT/"
           Copy-Item README.md, LICENSE "staging/$env:ARTIFACT/"
           Compress-Archive -Path "staging/$env:ARTIFACT/*" -DestinationPath "staging/$env:ARTIFACT.zip"
 
@@ -151,6 +149,19 @@ jobs:
       - uses: ./.github/actions/install-linux-deps
 
       - run: mise run web:install
+
+      - name: stage orpheus CLI for tauri externalBin
+        shell: bash
+        env:
+          RUST_TARGETS: ${{ matrix.rust-targets }}
+        run: |
+          if [[ -n "$RUST_TARGETS" ]]; then
+            IFS=',' read -r -a triples <<< "$RUST_TARGETS"
+            ./scripts/build-cli-for-tauri.sh "${triples[@]}"
+          else
+            ./scripts/build-cli-for-tauri.sh
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

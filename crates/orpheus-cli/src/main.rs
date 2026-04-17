@@ -1,3 +1,5 @@
+mod serve;
+
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -71,6 +73,21 @@ enum Command {
     },
     /// Run the offline demo against bundled fixtures
     Demo,
+    /// Serve the embedded web UI + JSON API
+    Serve {
+        /// Bind address
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Port
+        #[arg(long, default_value_t = 3000)]
+        port: u16,
+        /// Path to mock_balances.json
+        #[arg(long)]
+        mock_file: Option<PathBuf>,
+        /// Path to the demo wallet fixtures directory
+        #[arg(long)]
+        demo_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Debug, clap::ValueEnum)]
@@ -195,6 +212,23 @@ fn main() -> Result<()> {
                 Some(&provider as &dyn BalanceProvider),
             );
             render(&results, OutputFormat::Table, Some("mock"));
+        }
+        Command::Serve {
+            host,
+            port,
+            mock_file,
+            demo_dir,
+        } => {
+            let args = serve::ServeArgs {
+                host,
+                port,
+                mock_file,
+                demo_dir,
+            };
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(serve::run(args))?;
         }
     }
     Ok(())

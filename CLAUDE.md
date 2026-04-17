@@ -6,18 +6,19 @@ They supplement any global `~/.claude/CLAUDE.md`.
 ## Mental model
 
 Orpheus is a **Rust workspace** (`crates/`) plus a **React web app**
-(`apps/web`) that the Rust server and Tauri shell both embed. A single
-extraction core is shared by three frontends:
+(`apps/web`) that the `orpheus` CLI and Tauri shell both embed. A single
+extraction core powers every frontend:
 
 ```text
 apps/web (Vite + React + TS)          user-facing UI — bundled into dist/
-                                      consumed by both server and tauri
+                                      consumed by `orpheus serve` and tauri
 
 crates/
   orpheus-core           ← the one source of truth for crypto/extractors/
                            balance/scanner. Every other crate depends on it.
-  orpheus-cli            ← clap: scan / extract / mnemonic / demo
-  orpheus-server         ← axum; serves embedded apps/web/dist + JSON API
+  orpheus-cli            ← clap: scan / extract / mnemonic / demo / serve.
+                           The `serve` subcommand embeds apps/web/dist and
+                           exposes the JSON API over axum on a local port.
   orpheus-tauri/src-tauri← Tauri v2 desktop shell; #[tauri::command]s call
                            directly into orpheus-core (no HTTP sidecar)
   orpheus-demo-fixtures  ← regenerates synthesized fake wallets +
@@ -54,7 +55,7 @@ direct commits to `main`.
    `fix/multibit-salt-scan`).
 2. Commits use [Conventional Commits](https://www.conventionalcommits.org/).
    Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`,
-   `ci`, `chore`, `revert`. Optional `(scope)`: `core`, `cli`, `server`,
+   `ci`, `chore`, `revert`. Optional `(scope)`: `core`, `cli`,
    `tauri`, `web`, `ci`, `deps`, `fixtures`. `!` before `:` for
    breaking changes.
 3. Push early, open a draft PR so CI runs.
@@ -73,9 +74,9 @@ direct commits to `main`.
 | `mise run test`         | `cargo test --workspace --locked`             |
 | `mise run demo:fixtures`| regenerate synthetic demo wallets             |
 | `mise run cli:demo`     | offline scan of the demo fixtures             |
-| `mise run server:dev`   | axum on 127.0.0.1:3000                        |
+| `mise run server:dev`   | `orpheus serve` on 127.0.0.1:3000             |
 | `mise run web:dev`      | Vite on :5173 proxying /api → :3000           |
-| `mise run dev`          | server + web together                         |
+| `mise run dev`          | `orpheus serve` + web together                |
 | `mise run tauri:dev`    | desktop app in development                    |
 
 ## Security-sensitive changes

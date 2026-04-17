@@ -12,6 +12,8 @@ build/
 src-tauri/target/
 src-tauri/gen/
 apps/web/dist/
+# orpheus CLI binaries copied in as externalBin before tauri bundles them.
+crates/orpheus-tauri/src-tauri/binaries/
 
 # Editors
 .vscode/*

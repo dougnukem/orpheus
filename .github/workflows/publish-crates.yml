@@ -5,10 +5,10 @@
 # (the default). `orpheus-tauri` and `orpheus-demo-fixtures` are marked
 # `publish = false` and skipped automatically by cargo.
 #
-# Order matters: orpheus-core must publish before orpheus-cli and
-# orpheus-server because those depend on it via path + version. Cargo
-# usually discovers this via `cargo publish --workspace`, but we publish
-# explicitly for predictability and better error reporting.
+# Order matters: orpheus-core must publish before orpheus-cli because the
+# CLI depends on it via path + version. Cargo usually discovers this via
+# `cargo publish --workspace`, but we publish explicitly for predictability
+# and better error reporting.
 
 name: publish-crates
 
@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for c in orpheus-core orpheus-cli orpheus-server; do
+          for c in orpheus-core orpheus-cli; do
             echo "=== dry-run: $c ==="
             cargo publish --dry-run -p "$c"
           done
@@ -128,4 +128,3 @@ jobs:
           # Give crates.io a moment to index the new version.
           sleep 30
           publish_one orpheus-cli --no-verify
-          publish_one orpheus-server --no-verify

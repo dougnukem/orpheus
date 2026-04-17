@@ -14,6 +14,10 @@ cask "orpheus-head" do
   conflicts_with cask: "%%TAP_OWNER%%/%%TAP_NAME%%/orpheus"
 
   app "Orpheus.app"
+  # `orpheus` CLI is bundled inside Orpheus.app via Tauri externalBin.
+  # Symlink it onto $PATH so this cask also installs the unified
+  # `orpheus` binary (includes `orpheus serve`).
+  binary "#{appdir}/Orpheus.app/Contents/MacOS/orpheus"
 
   caveats <<~EOS
     orpheus-head tracks the tip of `main` and is rebuilt on every push.

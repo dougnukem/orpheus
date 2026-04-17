@@ -65,12 +65,12 @@ description = "Build the whole Rust workspace (debug)"
 run = "cargo build --workspace --all-targets"
 
 [tasks."build:release"]
-description = "Release build of the CLI + server binaries into target/release"
-run = "cargo build --release --locked -p orpheus-cli -p orpheus-server"
+description = "Release build of the unified `orpheus` binary into target/release"
+run = "cargo build --release --locked -p orpheus-cli"
 
 [tasks.install]
-description = "Install `orpheus` + `orpheus-server` into ~/.cargo/bin"
-run = "cargo install --path crates/orpheus-cli --locked --force && cargo install --path crates/orpheus-server --locked --force"
+description = "Install `orpheus` into ~/.cargo/bin"
+run = "cargo install --path crates/orpheus-cli --locked --force"
 
 [tasks.test]
 description = "Run all Rust tests"
@@ -154,8 +154,8 @@ depends = ["lint", "test", "web:build", "cli:demo"]
 # ---------------------------------------------------------------------------
 
 [tasks."server:dev"]
-description = "Axum server on 127.0.0.1:3000 serving embedded web/dist"
-run = "cargo run -p orpheus-server -- --host 127.0.0.1 --port 3000"
+description = "`orpheus serve` on 127.0.0.1:3000 serving embedded web/dist + /api"
+run = "cargo run -p orpheus-cli -- serve --host 127.0.0.1 --port 3000"
 
 [tasks.dev]
 description = "Run axum (:3000) + Vite (:5173) together"
@@ -172,13 +172,19 @@ run = "cargo run -p orpheus-cli --locked -- demo"
 description = "Regenerate synthetic demo wallet fixtures"
 run = "cargo run -p orpheus-demo-fixtures --locked"
 
+[tasks."tauri:cli"]
+description = "Stage the orpheus CLI for Tauri externalBin bundling (host triple)"
+run = "./scripts/build-cli-for-tauri.sh"
+
 [tasks."tauri:dev"]
 description = "Tauri v2 desktop app in development mode"
+depends = ["tauri:cli"]
 dir = "crates/orpheus-tauri"
 run = "pnpm tauri dev"
 
 [tasks."tauri:build"]
 description = "Package the Tauri desktop app for the current platform"
+depends = ["tauri:cli"]
 dir = "crates/orpheus-tauri"
 run = "pnpm tauri build"
 

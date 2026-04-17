@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Orpheus command-line interface — scan, extract, and recover Bitcoin wallets"
+description = "Orpheus command-line interface — scan, extract, serve, and recover Bitcoin wallets"
 readme = "../../README.md"
 keywords = ["bitcoin", "wallet", "recovery", "cli", "bip39"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
@@ -29,7 +29,17 @@ orpheus-core = { path = "../orpheus-core", version = "0.1.0" }
 anyhow.workspace = true
 clap.workspace = true
 comfy-table.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+# Async runtime + web server for `orpheus serve`, which hosts the embedded
+# React UI (apps/web/dist) and JSON API from the same binary.
 tokio.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+rust-embed.workspace = true
+mime_guess.workspace = true
+tempfile = "3"

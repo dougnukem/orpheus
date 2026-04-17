@@ -1,8 +1,9 @@
 //! Orpheus core — wallet extraction, crypto primitives, balance lookup.
 //!
 //! This crate is deliberately kept framework-agnostic so it can be driven by
-//! `orpheus-cli`, `orpheus-server` (axum), and `orpheus-tauri` (desktop)
-//! without any of them dragging in the others' dependencies.
+//! `orpheus-cli` (which also hosts `orpheus serve` for the axum + embedded
+//! web UI) and `orpheus-tauri` (desktop) without any of them dragging in the
+//! others' dependencies.
 
 #![forbid(unsafe_code)]
 
