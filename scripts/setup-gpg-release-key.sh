@@ -98,8 +98,10 @@ echo "[setup-gpg] preflight ok"
 
 # --- existing-key guard --------------------------------------------------
 echo "[setup-gpg] checking for existing key at $UID_EMAIL..."
+# `gpg --list-secret-keys <uid>` exits 2 when no key matches. That's not
+# an error for us — it's the expected first-run state — so swallow it.
 existing_fp=$(gpg --list-secret-keys --with-colons "$UID_EMAIL" 2>/dev/null \
-  | awk -F: '$1 == "fpr" { print $10; exit }')
+  | awk -F: '$1 == "fpr" { print $10; exit }' || true)
 
 if [[ -n "$existing_fp" ]]; then
   if [[ $FORCE -eq 0 ]]; then
