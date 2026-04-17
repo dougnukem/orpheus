@@ -1,0 +1,99 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "17b6bbc6c891",
+  "session_id": "db0b6848-64b5-4cdc-9f96-0ab718718e53",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T20:37:41.688512Z",
+  "branch": "refactor/bundle-server-into-cli",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/latest.yml",
+    ".github/workflows/nightly.yml",
+    ".github/workflows/publish-crates.yml",
+    ".github/workflows/release.yml",
+    "Cargo.lock",
+    "Cargo.toml",
+    "README.md",
+    "crates/orpheus-cli/Cargo.toml",
+    "crates/orpheus-cli/src/main.rs",
+    "crates/orpheus-server/Cargo.toml",
+    "crates/orpheus-server/build.rs",
+    "crates/orpheus-server/src/main.rs",
+    "docs/RELEASING.md",
+    "mise.toml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "936f84cac95d",
+  "token_usage": {
+    "input_tokens": 400,
+    "cache_creation_tokens": 372440,
+    "cache_read_tokens": 8925190,
+    "output_tokens": 84264,
+    "api_call_count": 61
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T20:37:41.661111Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 48,
+    "human_removed": 457,
+    "total_committed": 0,
+    "total_lines_changed": 515,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 623,
+      "user_lines_removed": 503,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".github/workflows/latest.yml": 15,
+        ".github/workflows/nightly.yml": 14,
+        ".github/workflows/publish-crates.yml": 5,
+        ".github/workflows/release.yml": 14,
+        ".gitignore": 2,
+        "CLAUDE.md": 9,
+        "Cargo.lock": 7,
+        "README.md": 12,
+        "crates/orpheus-cli/Cargo.toml": 11,
+        "crates/orpheus-cli/build.rs": 21,
+        "crates/orpheus-cli/src/main.rs": 34,
+        "crates/orpheus-cli/src/serve.rs": 352,
+        "crates/orpheus-core/src/lib.rs": 3,
+        "crates/orpheus-tauri/src-tauri/build.rs": 50,
+        "crates/orpheus-tauri/src-tauri/tauri.conf.json": 1,
+        "docs/RELEASING.md": 5,
+        "mise.toml": 12,
+        "packaging/homebrew/orpheus-head.rb.template": 4,
+        "packaging/homebrew/orpheus.rb.perarch.template": 4,
+        "packaging/homebrew/orpheus.rb.universal.template": 4,
+        "scripts/build-cli-for-tauri.sh": 44
+      },
+      "user_removed_per_file": {
+        ".github/workflows/latest.yml": 4,
+        ".github/workflows/nightly.yml": 3,
+        ".github/workflows/publish-crates.yml": 6,
+        ".github/workflows/release.yml": 4,
+        "CLAUDE.md": 8,
+        "Cargo.lock": 20,
+        "Cargo.toml": 1,
+        "README.md": 9,
+        "crates/orpheus-cli/Cargo.toml": 1,
+        "crates/orpheus-core/src/lib.rs": 2,
+        "crates/orpheus-server/Cargo.toml": 41,
+        "crates/orpheus-server/build.rs": 21,
+        "crates/orpheus-server/src/main.rs": 371,
+        "docs/RELEASING.md": 6,
+        "mise.toml": 6
+      }
+    }
+  ]
+}

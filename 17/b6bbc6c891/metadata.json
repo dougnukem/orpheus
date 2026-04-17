@@ -11,6 +11,7 @@
     ".github/workflows/release.yml",
     "Cargo.lock",
     "Cargo.toml",
+    "README.md",
     "crates/orpheus-cli/Cargo.toml",
     "crates/orpheus-cli/build.rs",
     "crates/orpheus-cli/src/main.rs",
@@ -18,6 +19,7 @@
     "crates/orpheus-server/Cargo.toml",
     "crates/orpheus-server/build.rs",
     "crates/orpheus-server/src/main.rs",
+    "docs/RELEASING.md",
     "mise.toml"
   ],
   "sessions": [
@@ -32,13 +34,19 @@
       "transcript": "/17/b6bbc6c891/1/full.jsonl",
       "content_hash": "/17/b6bbc6c891/1/content_hash.txt",
       "prompt": "/17/b6bbc6c891/1/prompt.txt"
+    },
+    {
+      "metadata": "/17/b6bbc6c891/2/metadata.json",
+      "transcript": "/17/b6bbc6c891/2/full.jsonl",
+      "content_hash": "/17/b6bbc6c891/2/content_hash.txt",
+      "prompt": "/17/b6bbc6c891/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 6762,
-    "cache_creation_tokens": 481693,
-    "cache_read_tokens": 14003459,
-    "output_tokens": 77795,
-    "api_call_count": 114
+    "input_tokens": 7162,
+    "cache_creation_tokens": 854133,
+    "cache_read_tokens": 22928649,
+    "output_tokens": 162059,
+    "api_call_count": 175
   }
 }

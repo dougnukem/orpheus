@@ -1,0 +1,31 @@
+Continue the Orpheus web-redesign work. Phase 0 and Phase 1 are merged to main (PR #9, squash commit d45f1c3). I want to pick up at Phase 2 — UI primitives from the implementation plan.
+
+Plan: docs/superpowers/plans/2026-04-17-web-redesign.md — Phase 2 is Tasks 2.1 through 2.7 (Button, FormFields, Card/Pill/StatBar/Spinner/Banner, CopyButton, WifReveal, QRCode, Table).
+Spec: docs/superpowers/specs/2026-04-17-web-redesign-design.md.
+
+Please:
+
+Read memory/MEMORY.md and the feedback_subagent_worktree.md memory — it contains a critical learning about implementer subagents silently committing to the wrong directory, and the mitigation (Step 0 pwd/branch check, do-not-modify file list).
+Create a fresh worktree: git worktree add -b feat/web-redesign-ui-primitives .worktrees/web-redesign-ui-primitives origin/main.
+Invoke the superpowers:subagent-driven-development skill and execute Phase 2 tasks (2.1–2.7) task-by-task with the TDD pattern the plan prescribes. Every implementer prompt must include the Step 0 worktree check from the memory file.
+Push early and open a draft PR on first push (gh pr create --draft), update the description as phases complete.
+Check in after each task completes — do not silently run through all 7 in one go without status updates.
+Phase 2 adds 7 hand-rolled UI primitives under apps/web/src/components/ui/, each with colocated tests. After Phase 2 is green and merged, we'll continue to Phase 3 (routing + Header + Breadcrumbs).
+
+---
+
+<ide_opened_file>The user opened the file /Users/ddaniels/Dropbox/orpheus/.worktrees/dependabot-actions/docs/RELEASING.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+1
+
+---
+
+<ide_opened_file>The user opened the file /Users/ddaniels/Dropbox/orpheus/crates/orpheus-core/src/extractors/bitcoin_core.rs in the IDE. This may or may not be related to the current task.</ide_opened_file>
+B
+
+---
+
+Yes
+
+---
+
+Remove "καταβαίνωto descend"
