@@ -31,7 +31,7 @@ pub struct Decoded {
 
 pub fn decode_mnemonic(phrase: &str, wordlist: &[String]) -> Result<Decoded, BlockchainComError> {
     let words: Vec<&str> = phrase.split_whitespace().collect();
-    if words.len() % 3 != 0 {
+    if !words.len().is_multiple_of(3) {
         return Err(BlockchainComError::BadWordCount(words.len()));
     }
     let idx = |w: &str| -> Result<usize, BlockchainComError> {

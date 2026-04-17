@@ -57,7 +57,7 @@ comfy-table = "7.1"
 indicatif = "0.17"
 
 # HTTP client for balance providers
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"], default-features = false }
 
 [profile.release]
 lto = "thin"

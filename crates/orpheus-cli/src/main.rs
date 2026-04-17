@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use comfy_table::{Cell, CellAlignment, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
 use orpheus_core::{
     WalletScanResult,
-    balance::{BalanceProvider, MockProvider},
+    balance::{BalanceProvider, MockProvider, ProviderKind, provider_from_kind},
     extractors::bip39_mnemonic::{DEFAULT_SPECS, derive_bip39},
     extractors::blockchain_com::decode_mnemonic,
     scanner::scan_path,
@@ -30,10 +30,21 @@ enum Command {
         /// File containing one candidate password per line
         #[arg(long)]
         passwords: Option<PathBuf>,
-        /// Balance provider
-        #[arg(long, default_value = "none")]
-        provider: String,
-        /// Mock balance JSON file (used when provider=mock)
+        /// Where to look up balances for each recovered address.
+        ///
+        ///   blockstream  — https://blockstream.info/api (default; public esplora, no API key)
+        ///   blockchain   — https://blockchain.info/balance (public, batched up to 20 addrs)
+        ///   mock         — offline lookup against --mock-file JSON; used by `orpheus demo`
+        ///   none         — skip balance lookup entirely (all balances reported as 0)
+        #[arg(
+            long,
+            value_enum,
+            default_value_t = CliProvider::Blockstream,
+            env = "ORPHEUS_PROVIDER",
+            verbatim_doc_comment,
+        )]
+        provider: CliProvider,
+        /// Mock balance JSON file (used when --provider mock)
         #[arg(long)]
         mock_file: Option<PathBuf>,
         /// Output format
@@ -69,6 +80,31 @@ enum OutputFormat {
     Csv,
 }
 
+/// Values accepted by `--provider`. Kept in lockstep with
+/// [`orpheus_core::balance::ProviderKind`].
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CliProvider {
+    /// https://blockstream.info/api (public esplora, no API key)
+    Blockstream,
+    /// https://blockchain.info/balance (public, batched up to 20 addrs)
+    Blockchain,
+    /// Offline lookup against --mock-file JSON
+    Mock,
+    /// Skip balance lookup entirely
+    None,
+}
+
+impl From<CliProvider> for ProviderKind {
+    fn from(p: CliProvider) -> Self {
+        match p {
+            CliProvider::Blockstream => ProviderKind::Blockstream,
+            CliProvider::Blockchain => ProviderKind::BlockchainInfo,
+            CliProvider::Mock => ProviderKind::Mock,
+            CliProvider::None => ProviderKind::None,
+        }
+    }
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -79,9 +115,20 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
     match cli.command {
-        Command::Scan { path, passwords, provider, mock_file, output } => {
+        Command::Scan {
+            path,
+            passwords,
+            provider,
+            mock_file,
+            output,
+        } => {
             let passes = load_passwords(passwords.as_deref())?;
-            let prov = make_provider(&provider, mock_file)?;
+            let prov = provider_from_kind(provider.into(), mock_file);
+            if let Some(p) = prov.as_deref() {
+                tracing::info!(provider = %p.name(), "balance provider");
+            } else {
+                tracing::info!("balance lookup disabled (--provider none)");
+            }
             let results = scan_path(&path, &passes, prov.as_deref());
             render(&results, output);
         }
@@ -90,43 +137,42 @@ fn main() -> Result<()> {
             let results = scan_path(&wallet, &passes, None);
             render(&results, OutputFormat::Table);
         }
-        Command::Mnemonic { phrase, kind, passphrase, gap_limit, wordlist } => {
-            match kind.as_str() {
-                "bip39" => {
-                    let keys = derive_bip39(
-                        &phrase,
-                        &passphrase,
-                        gap_limit,
-                        DEFAULT_SPECS,
-                        "(mnemonic)",
-                    )
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                    let r = WalletScanResult {
-                        source_file: "(mnemonic)".into(),
-                        source_type: orpheus_core::SourceType::Bip39,
-                        keys,
-                        error: None,
-                    };
-                    render(&[r], OutputFormat::Table);
-                }
-                "blockchain" => {
-                    let path = wordlist
-                        .ok_or_else(|| anyhow::anyhow!("blockchain.com requires --wordlist"))?;
-                    let words: Vec<String> = std::fs::read_to_string(&path)?
-                        .lines()
-                        .map(|l| l.trim().to_string())
-                        .filter(|l| !l.is_empty())
-                        .collect();
-                    let decoded = decode_mnemonic(&phrase, &words)
-                        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-                    println!(
-                        "decoded {} ({} words) -> password: {}",
-                        decoded.version_guess, decoded.word_count, decoded.password
-                    );
-                }
-                other => anyhow::bail!("unknown mnemonic kind: {other}"),
+        Command::Mnemonic {
+            phrase,
+            kind,
+            passphrase,
+            gap_limit,
+            wordlist,
+        } => match kind.as_str() {
+            "bip39" => {
+                let keys =
+                    derive_bip39(&phrase, &passphrase, gap_limit, DEFAULT_SPECS, "(mnemonic)")
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                let r = WalletScanResult {
+                    source_file: "(mnemonic)".into(),
+                    source_type: orpheus_core::SourceType::Bip39,
+                    keys,
+                    error: None,
+                };
+                render(&[r], OutputFormat::Table);
             }
-        }
+            "blockchain" => {
+                let path = wordlist
+                    .ok_or_else(|| anyhow::anyhow!("blockchain.com requires --wordlist"))?;
+                let words: Vec<String> = std::fs::read_to_string(&path)?
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                let decoded =
+                    decode_mnemonic(&phrase, &words).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+                println!(
+                    "decoded {} ({} words) -> password: {}",
+                    decoded.version_guess, decoded.word_count, decoded.password
+                );
+            }
+            other => anyhow::bail!("unknown mnemonic kind: {other}"),
+        },
         Command::Demo => {
             let demo_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../..")
@@ -161,17 +207,6 @@ fn load_passwords(path: Option<&std::path::Path>) -> Result<Vec<String>> {
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
         .collect())
-}
-
-fn make_provider(
-    name: &str,
-    mock_file: Option<PathBuf>,
-) -> Result<Option<Box<dyn BalanceProvider>>> {
-    Ok(match name {
-        "none" => None,
-        "mock" => Some(Box::new(MockProvider { path: mock_file })),
-        other => anyhow::bail!("provider {other} not yet supported"),
-    })
 }
 
 fn render(results: &[WalletScanResult], fmt: OutputFormat) {

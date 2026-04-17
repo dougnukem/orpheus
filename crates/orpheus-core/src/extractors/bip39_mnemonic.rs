@@ -116,10 +116,15 @@ impl Extractor for Bip39TextExtractor {
             .extension()
             .and_then(|s| s.to_str())
             .map(str::to_lowercase);
-        if !matches!(ext.as_deref(), Some("txt") | Some("mnemonic") | None | Some("")) {
+        if !matches!(
+            ext.as_deref(),
+            Some("txt") | Some("mnemonic") | None | Some("")
+        ) {
             return false;
         }
-        let Ok(text) = std::fs::read_to_string(path) else { return false };
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return false;
+        };
         let trimmed = text.trim();
         let words: Vec<&str> = trimmed.split_whitespace().collect();
         if !VALID_WORD_COUNTS.contains(&words.len()) {
@@ -172,7 +177,10 @@ mod tests {
             .iter()
             .find(|k| k.derivation_path.as_deref() == Some("m/44'/0'/0'/0/0"))
             .unwrap();
-        assert_eq!(bip44.address_compressed, "1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA");
+        assert_eq!(
+            bip44.address_compressed,
+            "1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA"
+        );
     }
 
     #[test]
@@ -180,7 +188,12 @@ mod tests {
         let keys = derive_bip39(ABANDON, "", 2, DEFAULT_SPECS, "x").unwrap();
         let bw: Vec<_> = keys
             .iter()
-            .filter(|k| k.derivation_path.as_deref().unwrap_or("").starts_with("m/0'/"))
+            .filter(|k| {
+                k.derivation_path
+                    .as_deref()
+                    .unwrap_or("")
+                    .starts_with("m/0'/")
+            })
             .collect();
         assert_eq!(bw.len(), 4);
     }

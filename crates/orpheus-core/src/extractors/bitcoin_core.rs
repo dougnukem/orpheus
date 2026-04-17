@@ -30,7 +30,9 @@ impl Extractor for BitcoinCoreExtractor {
         if !(name.ends_with(".dat") || name == "wallet") {
             return false;
         }
-        let Ok(head) = read_head(path, 4096) else { return false };
+        let Ok(head) = read_head(path, 4096) else {
+            return false;
+        };
         memmem(&head, DER_PATTERN) || memmem(&head, b"main\0")
     }
 
@@ -52,10 +54,10 @@ impl Extractor for BitcoinCoreExtractor {
                         continue;
                     }
                 };
-                if seen.insert(priv_bytes) {
-                    if let Some(k) = make_key(&priv_bytes, path, SourceType::BitcoinCore) {
-                        keys.push(k);
-                    }
+                if seen.insert(priv_bytes)
+                    && let Some(k) = make_key(&priv_bytes, path, SourceType::BitcoinCore)
+                {
+                    keys.push(k);
                 }
             }
             pos += 1;
@@ -147,11 +149,7 @@ mod tests {
 
     pub(crate) fn tempfile_path(name: &str) -> std::path::PathBuf {
         let mut p = std::env::temp_dir();
-        p.push(format!(
-            "orpheus-test-{}-{}",
-            std::process::id(),
-            name
-        ));
+        p.push(format!("orpheus-test-{}-{}", std::process::id(), name));
         p
     }
 }

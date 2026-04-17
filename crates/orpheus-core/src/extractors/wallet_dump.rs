@@ -189,7 +189,10 @@ mod tests {
         .unwrap();
         let r = WalletDumpExtractor.extract(&path, &[]);
         assert_eq!(r.keys.len(), 1);
-        assert_eq!(r.keys[0].derivation_path.as_deref(), Some("m/44'/0'/0'/0/0"));
+        assert_eq!(
+            r.keys[0].derivation_path.as_deref(),
+            Some("m/44'/0'/0'/0/0")
+        );
         std::fs::remove_file(&path).ok();
     }
 }

@@ -5,7 +5,8 @@ use std::path::Path;
 use crate::{
     crypto::{addresses_for_privkey, privkey_to_wif},
     extractors::{
-        Extractor, multibit::{find_encrypted_entries, find_scrypt_salt, try_decrypt_multibit},
+        Extractor,
+        multibit::{find_encrypted_entries, find_scrypt_salt, try_decrypt_multibit},
         scan_result_error,
     },
     models::{ExtractedKey, SourceType, WalletScanResult},
@@ -53,28 +54,27 @@ impl Extractor for EncryptedWalletExtractor {
         let mut found = Vec::new();
         for pw in passwords {
             for (iv, ct) in &entries {
-                if let Some(priv_bytes) = try_decrypt_multibit(pw, &salt, iv, ct) {
-                    if let Ok(a) = addresses_for_privkey(&priv_bytes) {
-                        if let Ok(wif) = privkey_to_wif(&priv_bytes, true) {
-                            found.push(ExtractedKey {
-                                wif,
-                                address_compressed: a.p2pkh_compressed,
-                                address_uncompressed: Some(a.p2pkh_uncompressed),
-                                address_p2sh_segwit: Some(a.p2sh_p2wpkh),
-                                address_bech32: Some(a.bech32),
-                                source_file: path.display().to_string(),
-                                source_type: SourceType::Encrypted,
-                                derivation_path: None,
-                                balance_sat: None,
-                                total_received_sat: None,
-                                tx_count: None,
-                                notes: Some(format!(
-                                    "multibit-v3 decrypted (password length {})",
-                                    pw.len()
-                                )),
-                            });
-                        }
-                    }
+                if let Some(priv_bytes) = try_decrypt_multibit(pw, &salt, iv, ct)
+                    && let Ok(a) = addresses_for_privkey(&priv_bytes)
+                    && let Ok(wif) = privkey_to_wif(&priv_bytes, true)
+                {
+                    found.push(ExtractedKey {
+                        wif,
+                        address_compressed: a.p2pkh_compressed,
+                        address_uncompressed: Some(a.p2pkh_uncompressed),
+                        address_p2sh_segwit: Some(a.p2sh_p2wpkh),
+                        address_bech32: Some(a.bech32),
+                        source_file: path.display().to_string(),
+                        source_type: SourceType::Encrypted,
+                        derivation_path: None,
+                        balance_sat: None,
+                        total_received_sat: None,
+                        tx_count: None,
+                        notes: Some(format!(
+                            "multibit-v3 decrypted (password length {})",
+                            pw.len()
+                        )),
+                    });
                 }
             }
             if !found.is_empty() {
@@ -118,8 +118,8 @@ mod tests {
         let aes_key = crate::crypto::scrypt_aes_key(password.as_bytes(), &salt).unwrap();
         let iv = [0x22u8; 16];
         type Cbc = cbc::Encryptor<aes::Aes256>;
-        let ct: Vec<u8> = Cbc::new((&aes_key).into(), (&iv).into())
-            .encrypt_padded_vec_mut::<Pkcs7>(&priv_bytes);
+        let ct: Vec<u8> =
+            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec_mut::<Pkcs7>(&priv_bytes);
 
         let path = tempfile_path("protected.wallet");
         let mut f = std::fs::File::create(&path).unwrap();

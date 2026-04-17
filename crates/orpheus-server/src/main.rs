@@ -13,7 +13,7 @@ use axum::{
 use clap::Parser;
 use orpheus_core::{
     WalletScanResult,
-    balance::{BalanceProvider, MockProvider},
+    balance::{BalanceProvider, MockProvider, ProviderKind, provider_from_kind},
     extractors::bip39_mnemonic::{DEFAULT_SPECS, derive_bip39},
     extractors::blockchain_com::decode_mnemonic,
     scanner::scan_path,
@@ -62,7 +62,9 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let workspace_root = workspace_root();
     let state = AppState {
-        demo_dir: args.demo_dir.unwrap_or_else(|| workspace_root.join("fixtures/demo-wallets")),
+        demo_dir: args
+            .demo_dir
+            .unwrap_or_else(|| workspace_root.join("fixtures/demo-wallets")),
         mock_file: args
             .mock_file
             .unwrap_or_else(|| workspace_root.join("fixtures/mock_balances.json")),
@@ -104,8 +106,7 @@ async fn api_scan(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<Json<ScanReply>, ApiError> {
-    let tmp = tempfile::TempDir::new()
-        .map_err(|e| ApiError::internal(format!("tempdir: {e}")))?;
+    let tmp = tempfile::TempDir::new().map_err(|e| ApiError::internal(format!("tempdir: {e}")))?;
     let mut passwords: Vec<String> = Vec::new();
     let mut provider_name = String::from("none");
     let mut file_count = 0;
@@ -117,10 +118,7 @@ async fn api_scan(
     {
         match field.name().unwrap_or("") {
             "wallet" => {
-                let filename = field
-                    .file_name()
-                    .unwrap_or("upload.bin")
-                    .to_string();
+                let filename = field.file_name().unwrap_or("upload.bin").to_string();
                 let safe = sanitize_filename(&filename);
                 let dest = tmp.path().join(safe);
                 let mut f = tokio::fs::File::create(&dest)
@@ -163,16 +161,12 @@ async fn api_scan(
         return Err(ApiError::bad_request("no files uploaded".into()));
     }
 
-    let provider: Option<Box<dyn BalanceProvider>> = match provider_name.as_str() {
-        "mock" => Some(Box::new(MockProvider {
+    let provider: Option<Box<dyn BalanceProvider>> = match ProviderKind::parse(&provider_name) {
+        Ok(ProviderKind::Mock) => Some(Box::new(MockProvider {
             path: Some(state.mock_file.clone()),
         })),
-        "none" => None,
-        other => {
-            return Err(ApiError::bad_request(format!(
-                "provider {other} not yet supported in server mode"
-            )));
-        }
+        Ok(kind) => provider_from_kind(kind, None),
+        Err(e) => return Err(ApiError::bad_request(e)),
     };
 
     let results = tokio::task::spawn_blocking({
@@ -198,14 +192,22 @@ struct MnemonicRequest {
     wordlist: Option<String>,
 }
 
-fn default_kind() -> String { "bip39".into() }
-fn default_gap_limit() -> u32 { 20 }
+fn default_kind() -> String {
+    "bip39".into()
+}
+fn default_gap_limit() -> u32 {
+    20
+}
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 enum MnemonicReply {
-    Bip39 { keys: Vec<orpheus_core::ExtractedKey> },
-    Blockchain { decoded: DecodedReply },
+    Bip39 {
+        keys: Vec<orpheus_core::ExtractedKey>,
+    },
+    Blockchain {
+        decoded: DecodedReply,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -215,9 +217,7 @@ struct DecodedReply {
     version: String,
 }
 
-async fn api_mnemonic(
-    Json(req): Json<MnemonicRequest>,
-) -> Result<Json<MnemonicReply>, ApiError> {
+async fn api_mnemonic(Json(req): Json<MnemonicRequest>) -> Result<Json<MnemonicReply>, ApiError> {
     if req.phrase.trim().is_empty() {
         return Err(ApiError::bad_request("phrase is required".into()));
     }
@@ -234,11 +234,9 @@ async fn api_mnemonic(
             Ok(Json(MnemonicReply::Bip39 { keys }))
         }
         "blockchain" => {
-            let path = req
-                .wordlist
-                .ok_or_else(|| ApiError::bad_request(
-                    "blockchain.com mnemonics require a wordlist path".into(),
-                ))?;
+            let path = req.wordlist.ok_or_else(|| {
+                ApiError::bad_request("blockchain.com mnemonics require a wordlist path".into())
+            })?;
             let text = std::fs::read_to_string(&path)
                 .map_err(|e| ApiError::bad_request(format!("wordlist: {e}")))?;
             let words: Vec<String> = text
@@ -340,10 +338,16 @@ struct ApiError {
 
 impl ApiError {
     fn bad_request(msg: String) -> Self {
-        Self { status: StatusCode::BAD_REQUEST, message: msg }
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            message: msg,
+        }
     }
     fn internal(msg: String) -> Self {
-        Self { status: StatusCode::INTERNAL_SERVER_ERROR, message: msg }
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: msg,
+        }
     }
 }
 
