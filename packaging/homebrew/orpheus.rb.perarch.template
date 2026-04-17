@@ -18,6 +18,10 @@ cask "orpheus" do
   depends_on macos: ">= :monterey"
 
   app "Orpheus.app"
+  # `orpheus` CLI is bundled inside Orpheus.app via Tauri externalBin.
+  # Symlink it onto $PATH so `brew install --cask orpheus` also installs
+  # the unified `orpheus` binary (includes `orpheus serve`).
+  binary "#{appdir}/Orpheus.app/Contents/MacOS/orpheus"
 
   caveats <<~EOS
     Orpheus is not yet signed with an Apple Developer ID. On first launch
