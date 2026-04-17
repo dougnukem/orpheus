@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "ee5b82575acd",
+  "strategy": "manual-commit",
+  "branch": "feat/balance-received-sent",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "crates/orpheus-cli/src/main.rs"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ee/5b82575acd/0/metadata.json",
+      "transcript": "/ee/5b82575acd/0/full.jsonl",
+      "content_hash": "/ee/5b82575acd/0/content_hash.txt",
+      "prompt": "/ee/5b82575acd/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 690,
+    "cache_creation_tokens": 113514,
+    "cache_read_tokens": 917845,
+    "output_tokens": 11930,
+    "api_call_count": 15
+  }
+}
