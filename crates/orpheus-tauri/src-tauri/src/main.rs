@@ -1,4 +1,6 @@
+// Prevent an additional console window on Windows in release mode
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 fn main() {
-    // Tauri will take over in a later step
-    println!("orpheus-tauri — scaffolded");
+    orpheus_tauri_lib::run()
 }
