@@ -8,8 +8,13 @@ export function WifReveal({ wif }: { wif: string }) {
   const [revealed, setRevealed] = useState(false);
   const revealBtnRef = useRef<HTMLButtonElement | null>(null);
   const hideBtnRef = useRef<HTMLButtonElement | null>(null);
+  const didMountRef = useRef(false);
 
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
     if (revealed) {
       hideBtnRef.current?.focus();
     } else {

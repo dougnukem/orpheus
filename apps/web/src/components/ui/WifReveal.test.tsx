@@ -63,4 +63,9 @@ describe("WifReveal", () => {
     await vi.waitFor(() => expect(err).toHaveBeenCalled());
     err.mockRestore();
   });
+
+  it("does not steal focus on initial mount", () => {
+    render(<WifReveal wif="L1abcDEF" />);
+    expect(screen.getByRole("button", { name: /reveal/i })).not.toHaveFocus();
+  });
 });

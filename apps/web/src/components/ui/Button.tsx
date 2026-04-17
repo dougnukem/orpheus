@@ -26,8 +26,17 @@ const variants: Record<Variant, string> = {
     "text-[var(--color-text-dim)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)]",
 };
 
-export function Button({ variant = "primary", className, ...rest }: Props) {
+export function Button({
+  variant = "primary",
+  className,
+  type = "button",
+  ...rest
+}: Props) {
   return (
-    <button {...rest} className={cn(base, variants[variant], className)} />
+    <button
+      type={type}
+      {...rest}
+      className={cn(base, variants[variant], className)}
+    />
   );
 }

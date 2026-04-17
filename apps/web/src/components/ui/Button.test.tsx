@@ -48,4 +48,14 @@ describe("Button", () => {
       "focus-visible:outline-[var(--color-accent)]",
     );
   });
+
+  it("defaults to type='button' to avoid accidental form submit", () => {
+    render(<Button>Scan</Button>);
+    expect(screen.getByRole("button")).toHaveAttribute("type", "button");
+  });
+
+  it("lets callers override the type attribute", () => {
+    render(<Button type="submit">Submit</Button>);
+    expect(screen.getByRole("button")).toHaveAttribute("type", "submit");
+  });
 });
