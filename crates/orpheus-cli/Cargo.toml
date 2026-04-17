@@ -6,14 +6,26 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Orpheus command-line interface"
+homepage.workspace = true
+description = "Orpheus command-line interface — scan, extract, and recover Bitcoin wallets"
+readme = "../../README.md"
+keywords = ["bitcoin", "wallet", "recovery", "cli", "bip39"]
+categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 
 [[bin]]
 name = "orpheus"
 path = "src/main.rs"
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/{ version }/orpheus-{ version }-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
+bin-dir = "orpheus-{ version }-{ target }/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
 [dependencies]
-orpheus-core = { path = "../orpheus-core" }
+orpheus-core = { path = "../orpheus-core", version = "0.1.0" }
 anyhow.workspace = true
 clap.workspace = true
 comfy-table.workspace = true

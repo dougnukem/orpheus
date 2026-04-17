@@ -61,15 +61,21 @@ echo "git hooks installed from .githooks/"
 # ---------------------------------------------------------------------------
 
 [tasks.build]
-description = "Build the whole Rust workspace"
+description = "Build the whole Rust workspace (debug)"
 run = "cargo build --workspace --all-targets"
+
+[tasks."build:release"]
+description = "Release build of the CLI + server binaries into target/release"
+run = "cargo build --release --locked -p orpheus-cli -p orpheus-server"
+
+[tasks.install]
+description = "Install `orpheus` + `orpheus-server` into ~/.cargo/bin"
+run = "cargo install --path crates/orpheus-cli --locked --force && cargo install --path crates/orpheus-server --locked --force"
 
 [tasks.test]
 description = "Run all Rust tests"
-# orpheus-tauri has no tests of its own, and its tauri-build step requires
-# platform-specific icons (e.g. icons/icon.ico on Windows) that aren't
-# checked in yet. clippy --workspace still compile-checks it, and latest.yml
-# handles the full tauri build for releases.
+# orpheus-tauri has no tests of its own. clippy --workspace compile-checks
+# it and latest.yml handles the full tauri build for releases.
 run = "cargo test --workspace --locked --exclude orpheus-tauri"
 
 [tasks."test:core"]
@@ -175,3 +181,10 @@ run = "pnpm tauri dev"
 description = "Package the Tauri desktop app for the current platform"
 dir = "crates/orpheus-tauri"
 run = "pnpm tauri build"
+
+[tasks."release:setup-gpg"]
+description = "One-time: generate the Orpheus release signing key + sync to GitHub secrets + .secrets"
+# raw = true preserves the controlling TTY so the script's silent
+# passphrase prompt (read -s) works.
+raw = true
+run = "./scripts/setup-gpg-release-key.sh"
