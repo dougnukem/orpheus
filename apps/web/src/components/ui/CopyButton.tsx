@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
+
+const COPIED_LABEL_MS = 1500;
 
 export function CopyButton({
   value,
@@ -11,11 +13,28 @@ export function CopyButton({
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const onClick = async () => {
-    await navigator.clipboard.writeText(value);
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (err) {
+      console.error("CopyButton: clipboard write failed", err);
+      return;
+    }
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setCopied(false);
+      timerRef.current = null;
+    }, COPIED_LABEL_MS);
   };
 
   return (
