@@ -61,8 +61,16 @@ echo "git hooks installed from .githooks/"
 # ---------------------------------------------------------------------------
 
 [tasks.build]
-description = "Build the whole Rust workspace"
+description = "Build the whole Rust workspace (debug)"
 run = "cargo build --workspace --all-targets"
+
+[tasks."build:release"]
+description = "Release build of the CLI + server binaries into target/release"
+run = "cargo build --release --locked -p orpheus-cli -p orpheus-server"
+
+[tasks.install]
+description = "Install `orpheus` + `orpheus-server` into ~/.cargo/bin"
+run = "cargo install --path crates/orpheus-cli --locked --force && cargo install --path crates/orpheus-server --locked --force"
 
 [tasks.test]
 description = "Run all Rust tests"
