@@ -21,7 +21,7 @@ from mnemonic import Mnemonic
 from orpheus.crypto.addresses import all_addresses_for_privkey
 from orpheus.crypto.bip32 import ExtendedKey, derive_path, master_from_seed, mnemonic_to_seed
 from orpheus.crypto.keys import privkey_to_wif
-from orpheus.extractors.base import Extractor
+from orpheus.extractors.base import Extractor, register
 from orpheus.models import ExtractedKey, SourceType
 
 
@@ -102,6 +102,7 @@ def _to_extracted_key(
     )
 
 
+@register
 class BIP39TextFileExtractor(Extractor):
     """Extractor for .txt files whose contents are a BIP39 mnemonic phrase."""
 

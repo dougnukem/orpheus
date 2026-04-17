@@ -24,7 +24,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from orpheus.crypto.addresses import all_addresses_for_privkey
 from orpheus.crypto.keys import privkey_to_wif, validate_privkey
-from orpheus.extractors.base import Extractor
+from orpheus.extractors.base import Extractor, register
 from orpheus.models import ExtractedKey, SourceType
 
 
@@ -97,6 +97,7 @@ def try_blockchain_com_aes_json(
     return None
 
 
+@register
 class EncryptedWalletExtractor(Extractor):
     """Try each password against recognized encrypted wallet formats."""
 
