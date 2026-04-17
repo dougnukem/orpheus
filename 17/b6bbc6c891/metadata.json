@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "17b6bbc6c891",
+  "strategy": "manual-commit",
+  "branch": "refactor/bundle-server-into-cli",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/latest.yml",
+    ".github/workflows/nightly.yml",
+    ".github/workflows/publish-crates.yml",
+    ".github/workflows/release.yml",
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/orpheus-cli/Cargo.toml",
+    "crates/orpheus-cli/build.rs",
+    "crates/orpheus-cli/src/main.rs",
+    "crates/orpheus-cli/src/serve.rs",
+    "crates/orpheus-server/Cargo.toml",
+    "crates/orpheus-server/build.rs",
+    "crates/orpheus-server/src/main.rs",
+    "mise.toml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/17/b6bbc6c891/0/metadata.json",
+      "transcript": "/17/b6bbc6c891/0/full.jsonl",
+      "content_hash": "/17/b6bbc6c891/0/content_hash.txt",
+      "prompt": "/17/b6bbc6c891/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 6697,
+    "cache_creation_tokens": 244460,
+    "cache_read_tokens": 11539068,
+    "output_tokens": 62626,
+    "api_call_count": 83
+  }
+}
