@@ -67,25 +67,43 @@ fn main() -> Result<()> {
         ];
         for (label, addr) in addrs {
             let entry = if i == 0 && label == "p2pkh_compressed" {
+                // 0.03865052 BTC homage: 0.05 received, 0.01134948 spent,
+                // 0.03865052 remaining.
                 serde_json::json!({
                     "balance_sat": 3_865_052u64,
                     "total_received_sat": 5_000_000u64,
+                    "total_sent_sat": 1_134_948u64,
                     "tx_count": 4u64
                 })
             } else if i == 2 && label == "bech32" {
                 serde_json::json!({
                     "balance_sat": 1_000_000u64,
                     "total_received_sat": 1_000_000u64,
+                    "total_sent_sat": 0u64,
                     "tx_count": 1u64
                 })
             } else if i == 3 && label == "p2pkh_compressed" {
                 serde_json::json!({
                     "balance_sat": 500_000u64,
                     "total_received_sat": 500_000u64,
+                    "total_sent_sat": 0u64,
                     "tx_count": 2u64
                 })
+            } else if i == 4 && label == "p2pkh_compressed" {
+                // History but empty — exercises the "spent (empty)" counter.
+                serde_json::json!({
+                    "balance_sat": 0u64,
+                    "total_received_sat": 250_000u64,
+                    "total_sent_sat": 250_000u64,
+                    "tx_count": 3u64
+                })
             } else {
-                serde_json::json!({"balance_sat": 0, "total_received_sat": 0, "tx_count": 0})
+                serde_json::json!({
+                    "balance_sat": 0u64,
+                    "total_received_sat": 0u64,
+                    "total_sent_sat": 0u64,
+                    "tx_count": 0u64
+                })
             };
             balances.insert(addr, entry);
         }

@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use comfy_table::{Cell, CellAlignment, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
 use orpheus_core::{
-    WalletScanResult,
+    ScanSummary, WalletScanResult,
     balance::{BalanceProvider, MockProvider, ProviderKind, provider_from_kind},
     extractors::bip39_mnemonic::{DEFAULT_SPECS, derive_bip39},
     extractors::blockchain_com::decode_mnemonic,
@@ -124,18 +124,19 @@ fn main() -> Result<()> {
         } => {
             let passes = load_passwords(passwords.as_deref())?;
             let prov = provider_from_kind(provider.into(), mock_file);
-            if let Some(p) = prov.as_deref() {
-                tracing::info!(provider = %p.name(), "balance provider");
+            let provider_name = prov.as_deref().map(|p| p.name().to_string());
+            if let Some(name) = &provider_name {
+                tracing::info!(provider = %name, "balance provider");
             } else {
                 tracing::info!("balance lookup disabled (--provider none)");
             }
             let results = scan_path(&path, &passes, prov.as_deref());
-            render(&results, output);
+            render(&results, output, provider_name.as_deref());
         }
         Command::Extract { wallet, passwords } => {
             let passes = load_passwords(passwords.as_deref())?;
             let results = scan_path(&wallet, &passes, None);
-            render(&results, OutputFormat::Table);
+            render(&results, OutputFormat::Table, None);
         }
         Command::Mnemonic {
             phrase,
@@ -154,7 +155,7 @@ fn main() -> Result<()> {
                     keys,
                     error: None,
                 };
-                render(&[r], OutputFormat::Table);
+                render(&[r], OutputFormat::Table, None);
             }
             "blockchain" => {
                 let path = wordlist
@@ -193,7 +194,7 @@ fn main() -> Result<()> {
                 &["orpheus-demo".into()],
                 Some(&provider as &dyn BalanceProvider),
             );
-            render(&results, OutputFormat::Table);
+            render(&results, OutputFormat::Table, Some("mock"));
         }
     }
     Ok(())
@@ -209,40 +210,50 @@ fn load_passwords(path: Option<&std::path::Path>) -> Result<Vec<String>> {
         .collect())
 }
 
-fn render(results: &[WalletScanResult], fmt: OutputFormat) {
+fn render(results: &[WalletScanResult], fmt: OutputFormat, provider: Option<&str>) {
     match fmt {
         OutputFormat::Json => {
-            let v = serde_json::to_string_pretty(results).unwrap();
-            println!("{v}");
+            let v = serde_json::json!({
+                "results": results,
+                "summary": ScanSummary::from_results(results, provider),
+            });
+            println!("{}", serde_json::to_string_pretty(&v).unwrap());
         }
         OutputFormat::Csv => {
-            println!("source_file,source_type,path,address,wif,balance_sat");
+            println!(
+                "source_file,source_type,path,address,wif,received_sat,sent_sat,balance_sat,tx_count"
+            );
             for r in results {
                 for k in &r.keys {
                     println!(
-                        "{},{},{},{},{},{}",
+                        "{},{},{},{},{},{},{},{},{}",
                         r.source_file,
                         r.source_type.as_str(),
                         k.derivation_path.as_deref().unwrap_or(""),
                         k.address_compressed,
                         k.wif,
-                        k.balance_sat.unwrap_or(0)
+                        k.total_received_sat.unwrap_or(0),
+                        k.total_sent_sat.unwrap_or(0),
+                        k.balance_sat.unwrap_or(0),
+                        k.tx_count.unwrap_or(0),
                     );
                 }
             }
         }
-        OutputFormat::Table => render_table(results),
+        OutputFormat::Table => render_table(results, provider),
     }
 }
 
-fn render_table(results: &[WalletScanResult]) {
-    let total_keys: usize = results.iter().map(|r| r.key_count()).sum();
-    let total_sat: u64 = results.iter().map(|r| r.total_balance_sat()).sum();
+fn sat_to_btc(sat: u64) -> String {
+    format!("{:.8}", sat as f64 / 1.0e8)
+}
+
+fn render_table(results: &[WalletScanResult], provider: Option<&str>) {
+    let summary = ScanSummary::from_results(results, provider);
+
     println!(
-        "\n Orpheus scan: {} wallet(s), {} key(s), total balance {:.8} BTC\n",
-        results.len(),
-        total_keys,
-        total_sat as f64 / 1.0e8,
+        "\n Orpheus scan: {} wallet(s), {} key(s)\n",
+        summary.wallets, summary.total_keys,
     );
 
     for r in results {
@@ -260,13 +271,24 @@ fn render_table(results: &[WalletScanResult]) {
         table
             .load_preset(UTF8_FULL)
             .apply_modifier(UTF8_ROUND_CORNERS)
-            .set_header(vec!["path", "address", "BTC", "txs", "WIF"]);
+            .set_header(vec![
+                "path", "address", "received", "sent", "balance", "txs", "WIF",
+            ]);
 
         let mut sorted: Vec<_> = r.keys.iter().collect();
-        sorted.sort_by_key(|k| std::cmp::Reverse(k.balance_sat.unwrap_or(0)));
-        let show_all = sorted.iter().all(|k| k.balance_sat.unwrap_or(0) == 0);
+        // Primary sort: current balance. Secondary: anything ever received.
+        sorted.sort_by_key(|k| {
+            std::cmp::Reverse((
+                k.balance_sat.unwrap_or(0),
+                k.total_received_sat.unwrap_or(0),
+            ))
+        });
+        let show_all = sorted
+            .iter()
+            .all(|k| k.balance_sat.unwrap_or(0) == 0 && k.total_received_sat.unwrap_or(0) == 0);
         for k in sorted.iter().take(if show_all { 5 } else { usize::MAX }) {
-            if !show_all && k.balance_sat.unwrap_or(0) == 0 {
+            let seen = k.balance_sat.unwrap_or(0) != 0 || k.total_received_sat.unwrap_or(0) != 0;
+            if !show_all && !seen {
                 continue;
             }
             let wif = if k.wif.len() > 16 {
@@ -277,7 +299,11 @@ fn render_table(results: &[WalletScanResult]) {
             table.add_row(vec![
                 Cell::new(k.derivation_path.clone().unwrap_or_else(|| "-".into())),
                 Cell::new(&k.address_compressed),
-                Cell::new(format!("{:.8}", k.balance_sat.unwrap_or(0) as f64 / 1.0e8))
+                Cell::new(sat_to_btc(k.total_received_sat.unwrap_or(0)))
+                    .set_alignment(CellAlignment::Right),
+                Cell::new(sat_to_btc(k.total_sent_sat.unwrap_or(0)))
+                    .set_alignment(CellAlignment::Right),
+                Cell::new(sat_to_btc(k.balance_sat.unwrap_or(0)))
                     .set_alignment(CellAlignment::Right),
                 Cell::new(k.tx_count.unwrap_or(0)).set_alignment(CellAlignment::Right),
                 Cell::new(wif),
@@ -285,4 +311,48 @@ fn render_table(results: &[WalletScanResult]) {
         }
         println!("{table}\n");
     }
+
+    print_summary(&summary);
+}
+
+fn print_summary(s: &ScanSummary) {
+    const RULE: &str = "─────────────────────────────────────────────────────────";
+    println!("{RULE}");
+    println!("  Orpheus scan summary");
+    println!("{RULE}");
+    println!("  wallets matched        {}", s.wallets);
+    println!("  total keys extracted   {}", s.total_keys);
+    println!("  unique addresses       {}", s.unique_addresses);
+    println!("    funded (balance > 0)   {}", s.funded_addresses,);
+    println!("    spent (history, empty) {}", s.spent_addresses,);
+    println!("    unfunded               {}", s.unfunded_addresses,);
+    println!(
+        "  total received         {} BTC",
+        sat_to_btc(s.total_received_sat)
+    );
+    println!(
+        "  total sent             {} BTC",
+        sat_to_btc(s.total_sent_sat)
+    );
+    println!(
+        "  current balance        {} BTC",
+        sat_to_btc(s.total_balance_sat)
+    );
+    if !s.by_source_type.is_empty() {
+        println!("  by source type:");
+        for st in &s.by_source_type {
+            println!(
+                "    {:14}  {:>3} wallet(s)  {:>5} keys  {} BTC",
+                st.source_type.as_str(),
+                st.wallets,
+                st.keys,
+                sat_to_btc(st.balance_sat),
+            );
+        }
+    }
+    println!(
+        "  balance provider       {}",
+        s.provider.as_deref().unwrap_or("none (lookup skipped)"),
+    );
+    println!("{RULE}");
 }

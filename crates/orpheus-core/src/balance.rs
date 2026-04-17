@@ -58,6 +58,8 @@ struct MockEntry {
     #[serde(default)]
     total_received_sat: u64,
     #[serde(default)]
+    total_sent_sat: Option<u64>,
+    #[serde(default)]
     tx_count: u64,
 }
 
@@ -91,14 +93,12 @@ impl BalanceProvider for MockProvider {
                         address: addr.clone(),
                         balance_sat: e.balance_sat,
                         total_received_sat: e.total_received_sat,
+                        total_sent_sat: e
+                            .total_sent_sat
+                            .unwrap_or_else(|| e.total_received_sat.saturating_sub(e.balance_sat)),
                         tx_count: e.tx_count,
                     })
-                    .unwrap_or_else(|| BalanceInfo {
-                        address: addr.clone(),
-                        balance_sat: 0,
-                        total_received_sat: 0,
-                        tx_count: 0,
-                    });
+                    .unwrap_or_else(|| BalanceInfo::zero(addr.clone()));
                 (addr.clone(), info)
             })
             .collect()
@@ -116,17 +116,7 @@ impl BalanceProvider for NoopProvider {
     fn fetch(&self, addresses: &[String]) -> HashMap<String, BalanceInfo> {
         addresses
             .iter()
-            .map(|a| {
-                (
-                    a.clone(),
-                    BalanceInfo {
-                        address: a.clone(),
-                        balance_sat: 0,
-                        total_received_sat: 0,
-                        tx_count: 0,
-                    },
-                )
-            })
+            .map(|a| (a.clone(), BalanceInfo::zero(a.clone())))
             .collect()
     }
 }
@@ -176,29 +166,36 @@ impl BalanceProvider for BlockstreamProvider {
                 .send()
                 .and_then(|r| r.error_for_status())
             {
-                Ok(resp) => match resp.json::<serde_json::Value>() {
-                    Ok(j) => {
-                        let chain = j.get("chain_stats").cloned().unwrap_or_default();
-                        let mem = j.get("mempool_stats").cloned().unwrap_or_default();
-                        let get = |v: &serde_json::Value, k: &str| -> u64 {
-                            v.get(k).and_then(|x| x.as_u64()).unwrap_or(0)
-                        };
-                        let funded = get(&chain, "funded_txo_sum") + get(&mem, "funded_txo_sum");
-                        let spent = get(&chain, "spent_txo_sum") + get(&mem, "spent_txo_sum");
-                        BalanceInfo {
-                            address: addr.clone(),
-                            balance_sat: funded.saturating_sub(spent),
-                            total_received_sat: funded,
-                            tx_count: get(&chain, "tx_count") + get(&mem, "tx_count"),
-                        }
-                    }
-                    Err(_) => zero(addr),
-                },
-                Err(_) => zero(addr),
+                Ok(resp) => resp
+                    .json::<serde_json::Value>()
+                    .ok()
+                    .map(|j| blockstream_info_from_json(addr, &j))
+                    .unwrap_or_else(|| BalanceInfo::zero(addr.clone())),
+                Err(_) => BalanceInfo::zero(addr.clone()),
             };
             out.insert(addr.clone(), info);
         }
         out
+    }
+}
+
+/// Parse a Blockstream `/address/{addr}` response into a [`BalanceInfo`].
+/// Kept pure so it can be unit-tested without a network round trip.
+#[cfg(feature = "network")]
+pub fn blockstream_info_from_json(address: &str, j: &serde_json::Value) -> BalanceInfo {
+    let chain = j.get("chain_stats").cloned().unwrap_or_default();
+    let mem = j.get("mempool_stats").cloned().unwrap_or_default();
+    let get = |v: &serde_json::Value, k: &str| -> u64 {
+        v.get(k).and_then(serde_json::Value::as_u64).unwrap_or(0)
+    };
+    let funded = get(&chain, "funded_txo_sum") + get(&mem, "funded_txo_sum");
+    let spent = get(&chain, "spent_txo_sum") + get(&mem, "spent_txo_sum");
+    BalanceInfo {
+        address: address.to_string(),
+        balance_sat: funded.saturating_sub(spent),
+        total_received_sat: funded,
+        total_sent_sat: spent,
+        tx_count: get(&chain, "tx_count") + get(&mem, "tx_count"),
     }
 }
 
@@ -252,36 +249,34 @@ impl BalanceProvider for BlockchainInfoProvider {
                 continue;
             };
             for (addr, info) in map {
+                let balance = info
+                    .get("final_balance")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                let received = info
+                    .get("total_received")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
                 out.insert(
                     addr.clone(),
                     BalanceInfo {
                         address: addr,
-                        balance_sat: info
-                            .get("final_balance")
-                            .and_then(|v| v.as_u64())
+                        balance_sat: balance,
+                        total_received_sat: received,
+                        total_sent_sat: received.saturating_sub(balance),
+                        tx_count: info
+                            .get("n_tx")
+                            .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0),
-                        total_received_sat: info
-                            .get("total_received")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0),
-                        tx_count: info.get("n_tx").and_then(|v| v.as_u64()).unwrap_or(0),
                     },
                 );
             }
         }
         for addr in addresses {
-            out.entry(addr.clone()).or_insert_with(|| zero(addr));
+            out.entry(addr.clone())
+                .or_insert_with(|| BalanceInfo::zero(addr.clone()));
         }
         out
-    }
-}
-
-fn zero(addr: &str) -> BalanceInfo {
-    BalanceInfo {
-        address: addr.to_string(),
-        balance_sat: 0,
-        total_received_sat: 0,
-        tx_count: 0,
     }
 }
 
@@ -323,6 +318,7 @@ pub fn attach_balances(keys: &mut [ExtractedKey], provider: &dyn BalanceProvider
         if let Some(info) = balances.get(&k.address_compressed) {
             k.balance_sat = Some(info.balance_sat);
             k.total_received_sat = Some(info.total_received_sat);
+            k.total_sent_sat = Some(info.total_sent_sat);
             k.tx_count = Some(info.tx_count);
         }
     }
@@ -373,11 +369,70 @@ mod tests {
             derivation_path: None,
             balance_sat: None,
             total_received_sat: None,
+            total_sent_sat: None,
             tx_count: None,
             notes: None,
         }];
         attach_balances(&mut keys, &provider);
         assert_eq!(keys[0].balance_sat, Some(7));
         std::fs::remove_file(&tmp).ok();
+    }
+
+    #[test]
+    fn mock_derives_sent_when_not_provided() {
+        let tmp = std::env::temp_dir().join("orpheus-mock-sent.json");
+        std::fs::write(
+            &tmp,
+            r#"{"1abc":{"balance_sat":100,"total_received_sat":500,"tx_count":3}}"#,
+        )
+        .unwrap();
+        let provider = MockProvider {
+            path: Some(tmp.clone()),
+        };
+        let r = provider.fetch(&["1abc".into()]);
+        // sent = received - balance = 500 - 100 = 400 when not explicit
+        assert_eq!(r["1abc"].total_sent_sat, 400);
+        std::fs::remove_file(&tmp).ok();
+    }
+
+    #[test]
+    fn mock_respects_explicit_sent() {
+        let tmp = std::env::temp_dir().join("orpheus-mock-sent-explicit.json");
+        std::fs::write(
+            &tmp,
+            r#"{"1abc":{"balance_sat":100,"total_received_sat":500,"total_sent_sat":999,"tx_count":3}}"#,
+        )
+        .unwrap();
+        let provider = MockProvider {
+            path: Some(tmp.clone()),
+        };
+        let r = provider.fetch(&["1abc".into()]);
+        assert_eq!(r["1abc"].total_sent_sat, 999);
+        std::fs::remove_file(&tmp).ok();
+    }
+
+    #[cfg(feature = "network")]
+    #[test]
+    fn blockstream_json_parse_pins_fields() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{
+                "chain_stats": {
+                    "funded_txo_sum": 5000000,
+                    "spent_txo_sum": 1134948,
+                    "tx_count": 4
+                },
+                "mempool_stats": {
+                    "funded_txo_sum": 0,
+                    "spent_txo_sum": 0,
+                    "tx_count": 0
+                }
+            }"#,
+        )
+        .unwrap();
+        let info = blockstream_info_from_json("1EBuf21icKTE5m3HWVndKx2bTxvqrWCqV6", &json);
+        assert_eq!(info.balance_sat, 3_865_052);
+        assert_eq!(info.total_received_sat, 5_000_000);
+        assert_eq!(info.total_sent_sat, 1_134_948);
+        assert_eq!(info.tx_count, 4);
     }
 }

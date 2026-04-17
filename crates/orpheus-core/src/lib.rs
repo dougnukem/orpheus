@@ -12,4 +12,6 @@ pub mod extractors;
 pub mod models;
 pub mod scanner;
 
-pub use models::{BalanceInfo, ExtractedKey, SourceType, WalletScanResult};
+pub use models::{
+    BalanceInfo, ExtractedKey, ScanSummary, SourceType, SourceTypeStats, WalletScanResult,
+};
