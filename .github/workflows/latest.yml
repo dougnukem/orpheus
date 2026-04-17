@@ -45,8 +45,13 @@ jobs:
             os: ubuntu-24.04-arm
             artifact: orpheus-linux-aarch64
             archive: tar.gz
+          # Cross-compile x86_64 binaries from the Apple Silicon runner —
+          # GitHub's macos-13 (Intel) runner pool is effectively unavailable
+          # (jobs queue for hours and never start). `rustup target add` +
+          # `cargo build --target x86_64-apple-darwin` on macos-latest
+          # produces the same artifact.
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             artifact: orpheus-macos-x86_64
             archive: tar.gz
           - target: aarch64-apple-darwin
@@ -61,8 +66,8 @@ jobs:
       TARGET: ${{ matrix.target }}
       ARTIFACT: ${{ matrix.artifact }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
@@ -98,7 +103,7 @@ jobs:
           Copy-Item README.md, LICENSE "staging/$env:ARTIFACT/"
           Compress-Archive -Path "staging/$env:ARTIFACT/*" -DestinationPath "staging/$env:ARTIFACT.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: staging/${{ matrix.artifact }}.${{ matrix.archive }}
@@ -124,8 +129,8 @@ jobs:
             args: ""
             rust-targets: ""
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
@@ -143,17 +148,7 @@ jobs:
           workspaces: "crates/orpheus-tauri/src-tauri -> target"
           shared-key: latest-tauri-${{ matrix.name }}
 
-      - name: install linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            libssl-dev
+      - uses: ./.github/actions/install-linux-deps
 
       - run: mise run web:install
       - uses: tauri-apps/tauri-action@v0
@@ -166,16 +161,33 @@ jobs:
       - name: collect tauri bundles
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p tauri-output
-          find crates/orpheus-tauri/src-tauri/target -type f \
-            \( -name "*.dmg" -o -name "*.app.tar.gz" \
-               -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
-               -o -name "*.msi" -o -name "*.exe" \) \
-            -not -path "*/deps/*" -not -path "*/build/*" \
+          # Cargo workspace: bundles land under the workspace root `target/`.
+          # Layout varies by target triple:
+          #   native   -> target/release/bundle/<kind>/...
+          #   crossed  -> target/<triple>/release/bundle/<kind>/...
+          #               (e.g. target/universal-apple-darwin/release/bundle/...)
+          # So search the whole target/ tree and filter by the
+          # .../release/bundle/ path segment. Tauri v2 emits duplicates
+          # (Orpheus_0.1.0_amd64.deb AND lowercase
+          # orpheus_0.1.0_amd64.deb from the Cargo crate name); the
+          # Orpheus_/Orpheus- name filter keeps only the productName-cased
+          # ones.
+          find target -type f -path "*/release/bundle/*" \
+            \( -name "Orpheus_*.dmg"    -o -name "Orpheus*.app.tar.gz" \
+               -o -name "Orpheus_*.AppImage" \
+               -o -name "Orpheus_*.deb" -o -name "Orpheus-*.rpm" \
+               -o -name "Orpheus_*.msi" -o -name "Orpheus_*.exe" \) \
             -exec cp {} tauri-output/ \;
           ls -la tauri-output/
+          if [ -z "$(ls -A tauri-output/)" ]; then
+            echo "::error::no Tauri bundles found under target/**/release/bundle"
+            find target -type d -name bundle 2>&1 | head -20 || true
+            exit 1
+          fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tauri-${{ matrix.name }}
           path: tauri-output/*
@@ -191,11 +203,11 @@ jobs:
       SHA: ${{ github.sha }}
       RUN_ID: ${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -203,13 +215,21 @@ jobs:
       - name: list artifacts
         run: ls -la dist/
 
+      - name: sign artifacts with gpg
+        uses: ./.github/actions/sign-artifacts
+        with:
+          artifacts-dir: dist
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+
       - name: delete previous latest release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release delete "$LATEST_TAG" --yes --cleanup-tag || true
 
       - name: create latest pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.LATEST_TAG }}
           name: "Latest (main @ ${{ github.sha }})"
@@ -222,5 +242,11 @@ jobs:
 
             - commit: `${{ github.sha }}`
             - run:    `${{ github.run_id }}`
+
+            All artifacts are GPG-signed. Verify with:
+            ```
+            gpg --verify SHA256SUMS.asc SHA256SUMS
+            sha256sum -c SHA256SUMS
+            ```
           files: dist/*
           fail_on_unmatched_files: true

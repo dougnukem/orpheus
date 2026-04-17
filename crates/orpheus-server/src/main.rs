@@ -12,7 +12,7 @@ use axum::{
 };
 use clap::Parser;
 use orpheus_core::{
-    WalletScanResult,
+    ScanSummary, WalletScanResult,
     balance::{BalanceProvider, MockProvider, ProviderKind, provider_from_kind},
     extractors::bip39_mnemonic::{DEFAULT_SPECS, derive_bip39},
     extractors::blockchain_com::decode_mnemonic,
@@ -100,6 +100,14 @@ async fn healthz() -> &'static str {
 #[derive(Debug, Serialize)]
 struct ScanReply {
     results: Vec<WalletScanResult>,
+    summary: ScanSummary,
+}
+
+impl ScanReply {
+    fn new(results: Vec<WalletScanResult>, provider: Option<&str>) -> Self {
+        let summary = ScanSummary::from_results(&results, provider);
+        Self { results, summary }
+    }
 }
 
 async fn api_scan(
@@ -168,6 +176,7 @@ async fn api_scan(
         Ok(kind) => provider_from_kind(kind, None),
         Err(e) => return Err(ApiError::bad_request(e)),
     };
+    let provider_label = provider.as_deref().map(|p| p.name().to_string());
 
     let results = tokio::task::spawn_blocking({
         let root = tmp.path().to_path_buf();
@@ -176,7 +185,7 @@ async fn api_scan(
     .await
     .map_err(|e| ApiError::internal(format!("join: {e}")))?;
 
-    Ok(Json(ScanReply { results }))
+    Ok(Json(ScanReply::new(results, provider_label.as_deref())))
 }
 
 #[derive(Debug, Deserialize)]
@@ -272,7 +281,7 @@ async fn api_demo(State(state): State<Arc<AppState>>) -> Result<Json<ScanReply>,
     })
     .await
     .map_err(|e| ApiError::internal(format!("join: {e}")))?;
-    Ok(Json(ScanReply { results }))
+    Ok(Json(ScanReply::new(results, Some("mock"))))
 }
 
 // ---- static assets ----------------------------------------------------------
