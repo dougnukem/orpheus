@@ -1,0 +1,150 @@
+# Publish Homebrew cask — called by release.yml after a tagged release
+# is live on GitHub.
+#
+# Writes an updated Cask formula to the external tap repository
+# `dougnukem/homebrew-orpheus` so users can `brew install --cask orpheus`
+# and receive the newest version.
+#
+# Requires:
+#   - a HOMEBREW_TAP_TOKEN secret (GitHub PAT with repo scope on the tap)
+#   - the tap repo to already exist and contain Casks/orpheus.rb (even
+#     empty). The first version is bootstrapped by hand; subsequent
+#     releases are updated automatically by this workflow.
+#
+# macOS signing status:
+#   * The Tauri .app produced by release.yml is currently UNSIGNED. The
+#     cask installs successfully but users hit Gatekeeper on first launch.
+#   * The cask template below includes Gatekeeper-bypass instructions in
+#     its `caveats` block.
+#   * Once Apple Developer signing is enabled in release.yml, delete the
+#     caveats block in packaging/homebrew/orpheus.rb.template and re-run.
+
+name: publish-cask
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.1)."
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.1)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-cask-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAP_OWNER: dougnukem
+  TAP_REPO: homebrew-orpheus
+
+jobs:
+  update-cask:
+    name: update homebrew cask
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: derive version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: compute artifact sha256s
+        id: sha
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/$REPO/releases/download/$TAG"
+          # Tauri produces per-arch DMGs named like:
+          #   Orpheus_0.1.0_aarch64.dmg
+          #   Orpheus_0.1.0_x64.dmg
+          # The universal-apple-darwin target combines both architectures
+          # into a single DMG labelled universal. Fetch whichever exists.
+          fetch_sha() {
+            local url=$1
+            if curl -sfL -o /tmp/art "$url"; then
+              sha256sum /tmp/art | cut -d' ' -f1
+            else
+              echo "MISSING"
+            fi
+          }
+          ARM_SHA=$(fetch_sha "$BASE/Orpheus_${VERSION}_aarch64.dmg")
+          INTEL_SHA=$(fetch_sha "$BASE/Orpheus_${VERSION}_x64.dmg")
+          UNIV_SHA=$(fetch_sha "$BASE/Orpheus_${VERSION}_universal.dmg")
+          echo "arm=$ARM_SHA"        >> "$GITHUB_OUTPUT"
+          echo "intel=$INTEL_SHA"    >> "$GITHUB_OUTPUT"
+          echo "universal=$UNIV_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_OWNER }}/${{ env.TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: render cask from template
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          ARM_SHA: ${{ steps.sha.outputs.arm }}
+          INTEL_SHA: ${{ steps.sha.outputs.intel }}
+          UNIV_SHA: ${{ steps.sha.outputs.universal }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tap/Casks
+          if [[ "$UNIV_SHA" != "MISSING" ]]; then
+            # Single-SHA universal binary variant.
+            sed \
+              -e "s|%%VERSION%%|$VERSION|g" \
+              -e "s|%%REPO%%|$REPO|g" \
+              -e "s|%%UNIVERSAL_SHA%%|$UNIV_SHA|g" \
+              packaging/homebrew/orpheus.rb.universal.template > tap/Casks/orpheus.rb
+          else
+            if [[ "$ARM_SHA" == "MISSING" || "$INTEL_SHA" == "MISSING" ]]; then
+              echo "::error::neither universal nor both per-arch DMGs present for $TAG"
+              exit 1
+            fi
+            sed \
+              -e "s|%%VERSION%%|$VERSION|g" \
+              -e "s|%%REPO%%|$REPO|g" \
+              -e "s|%%ARM_SHA%%|$ARM_SHA|g" \
+              -e "s|%%INTEL_SHA%%|$INTEL_SHA|g" \
+              packaging/homebrew/orpheus.rb.perarch.template > tap/Casks/orpheus.rb
+          fi
+          cat tap/Casks/orpheus.rb
+
+      - name: commit + push tap update
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        shell: bash
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "cask already up to date; nothing to commit"
+            exit 0
+          fi
+          git config user.name "orpheus-release-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add Casks/orpheus.rb
+          git commit -m "orpheus ${VERSION}"
+          git push
