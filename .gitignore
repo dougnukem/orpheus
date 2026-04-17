@@ -46,3 +46,6 @@ ASSUMPTIONS.md
 TODO.md
 CHANGELOG.md
 .claude/plans/_wip/
+
+# Git worktrees
+.worktrees/
