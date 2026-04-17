@@ -14,7 +14,7 @@ React UI, and a native desktop app — all sharing the same extraction core.
 
 ## Architecture
 
-```
+```text
 orpheus/
 ├── Cargo.toml              # workspace
 ├── mise.toml               # toolchain + tasks + hooks
@@ -34,17 +34,20 @@ The `orpheus-core` crate is the single source of truth. Every frontend
 
 ## Getting started
 
-Orpheus ships a `mise.toml` that pins every tool version used in development.
+Orpheus is managed by **[mise](https://mise.jdx.dev)**. It's the single
+source of truth for toolchain versions (see `[tools]` in `mise.toml`) and
+for every scripted task — local development and CI run the same
+`mise run <task>` commands.
 
 ```bash
 # Install mise once: https://mise.jdx.dev
-mise install              # Installs rust 1.95, node 22, pnpm 9
-mise run setup            # Cargo fetch + pnpm install
+mise install              # fetch rust 1.95, node 22, pnpm 9
+mise run setup            # cargo fetch + pnpm install
 ```
 
 On `cd` into the repo mise auto-activates the toolchain and installs the
-git pre-commit hook (`.githooks/pre-commit` → `cargo fmt --check` +
-`cargo clippy -D warnings`).
+git pre-commit hook (`.githooks/pre-commit` → `mise run pre-commit` =
+`cargo fmt --check` + `cargo clippy -D warnings`).
 
 ### Common tasks
 
@@ -89,6 +92,47 @@ seeded this project.
 BIP39 derivation runs BIP44, BIP49, BIP84, *and* Breadwallet's legacy
 `m/0'/{0,1}/x` — a first-class path anchored by a regression test for
 the 2013-era iOS wallet that motivated this project.
+
+## Balance providers
+
+Every recovered address can be enriched with balance + received-total +
+tx-count via `--provider`:
+
+| Value         | Source                                                        |
+|---------------|---------------------------------------------------------------|
+| `blockstream` | https://blockstream.info/api (public esplora, no API key) — **default** |
+| `blockchain`  | https://blockchain.info/balance (public, batched up to 20 addrs) |
+| `mock`        | offline lookup against `--mock-file` JSON (used by `orpheus demo`) |
+| `none`        | skip balance lookup entirely                                  |
+
+The same identifiers work in `--provider <name>` on the CLI, the
+`ORPHEUS_PROVIDER` env var, and the `Balance provider` dropdown in the
+web UI. Use `none` or `mock` on air-gapped machines; the default
+deliberately calls out to the internet so first-run scans report real
+balances without extra flags.
+
+## Releases & versioning
+
+This repo follows [Conventional Commits](https://www.conventionalcommits.org/).
+Release notes for every tagged release are generated from the commit
+range and grouped by type (Features / Bug Fixes / Performance / …). See
+[CONTRIBUTING.md](CONTRIBUTING.md#commit-messages--conventional-commits)
+for the conventions we enforce.
+
+**Where to grab builds:**
+
+- [**Latest release**](https://github.com/dougnukem/orpheus/releases/latest) —
+  the most recent signed, tagged release. Use this.
+- [**`latest` pre-release**](https://github.com/dougnukem/orpheus/releases/tag/latest) —
+  rolling build of `main`; useful for bleeding-edge smoke-testing.
+
+Artifacts published for every tagged release:
+
+- `orpheus-vX.Y.Z-{linux,macos,windows}-{x86_64,aarch64}.{tar.gz,zip}` —
+  standalone `orpheus` CLI + `orpheus-server` binary
+- Tauri desktop bundles (`.dmg` universal macOS, `.AppImage` + `.deb` Linux,
+  `.msi` Windows)
+- `SHA256SUMS` for integrity verification
 
 ## Security
 
