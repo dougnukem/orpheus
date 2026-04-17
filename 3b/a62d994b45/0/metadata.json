@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "3ba62d994b45",
+  "session_id": "efe3044b-c7cf-4ccf-a7ce-9996d5194f9f",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T07:19:28.673263Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/superpowers/plans/2026-04-17-rust-desktop-rewrite.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "1a0ee54efd87",
+  "transcript_identifier_at_start": "3ca36a53-f14d-4dd3-a9ac-a74155abe498",
+  "checkpoint_transcript_start": 62,
+  "transcript_lines_at_start": 62,
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 35870,
+    "cache_read_tokens": 758293,
+    "output_tokens": 31516,
+    "api_call_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T07:19:28.488098Z",
+    "agent_lines": 1271,
+    "human_added": 34782,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 36053,
+    "agent_percentage": 3.52536543422184
+  },
+  "transcript_path": ".claude/projects/-Users-ddaniels-Dropbox-orpheus/efe3044b-c7cf-4ccf-a7ce-9996d5194f9f.jsonl"
+}
