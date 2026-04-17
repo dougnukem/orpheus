@@ -107,7 +107,7 @@ function StatusLine({ status }: { status: Status }) {
 function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [passwords, setPasswords] = useState("");
-  const [provider, setProvider] = useState("mock");
+  const [provider, setProvider] = useState("blockstream");
   const { status, setStatus } = useStatus();
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -143,10 +143,10 @@ function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }
         <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
           <Field label="Balance provider">
             <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <option value="mock">mock (offline)</option>
-              <option value="none">none</option>
+              <option value="blockstream">blockstream.info (default)</option>
               <option value="blockchain">blockchain.info</option>
-              <option value="blockstream">blockstream.info</option>
+              <option value="mock">mock (offline)</option>
+              <option value="none">none (skip lookup)</option>
             </Select>
           </Field>
           <Field label="Passwords (one per line, optional)">

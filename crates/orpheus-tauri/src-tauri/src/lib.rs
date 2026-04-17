@@ -7,12 +7,11 @@
 use std::path::PathBuf;
 
 use orpheus_core::{
-    WalletScanResult,
+    ExtractedKey, WalletScanResult,
     balance::{BalanceProvider, MockProvider},
     extractors::bip39_mnemonic::{DEFAULT_SPECS, derive_bip39},
     extractors::blockchain_com::decode_mnemonic,
     scanner::scan_path,
-    ExtractedKey,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,16 +36,17 @@ async fn scan_paths(
         let passwords = passwords.clone();
         let provider_name = provider_name.clone();
         let mock_path = mock_path.clone();
-        let partial = tokio::task::spawn_blocking(move || -> Result<Vec<WalletScanResult>, String> {
-            let provider: Option<Box<dyn BalanceProvider>> = match provider_name.as_str() {
-                "none" => None,
-                "mock" => Some(Box::new(MockProvider { path: mock_path })),
-                other => return Err(format!("provider {other} not supported in desktop mode")),
-            };
-            Ok(scan_path(&root, &passwords, provider.as_deref()))
-        })
-        .await
-        .map_err(|e| e.to_string())??;
+        let partial =
+            tokio::task::spawn_blocking(move || -> Result<Vec<WalletScanResult>, String> {
+                let provider: Option<Box<dyn BalanceProvider>> = match provider_name.as_str() {
+                    "none" => None,
+                    "mock" => Some(Box::new(MockProvider { path: mock_path })),
+                    other => return Err(format!("provider {other} not supported in desktop mode")),
+                };
+                Ok(scan_path(&root, &passwords, provider.as_deref()))
+            })
+            .await
+            .map_err(|e| e.to_string())??;
         all.extend(partial);
     }
     Ok(ScanReply { results: all })
@@ -65,8 +65,12 @@ pub struct MnemonicInput {
     wordlist: Option<String>,
 }
 
-fn default_kind() -> String { "bip39".into() }
-fn default_gap() -> u32 { 20 }
+fn default_kind() -> String {
+    "bip39".into()
+}
+fn default_gap() -> u32 {
+    20
+}
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
@@ -108,8 +112,8 @@ fn mnemonic(input: MnemonicInput) -> Result<MnemonicReply, String> {
                 .map(|l| l.trim().to_string())
                 .filter(|l| !l.is_empty())
                 .collect();
-            let decoded = decode_mnemonic(input.phrase.trim(), &words)
-                .map_err(|e| e.to_string())?;
+            let decoded =
+                decode_mnemonic(input.phrase.trim(), &words).map_err(|e| e.to_string())?;
             Ok(MnemonicReply::Blockchain {
                 decoded: DecodedReply {
                     password: decoded.password,

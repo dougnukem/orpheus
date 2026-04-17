@@ -34,7 +34,9 @@ impl Extractor for MultibitExtractor {
         if ext != "wallet" && ext != "bak" {
             return false;
         }
-        let Ok(head) = read_head(path, 512) else { return false };
+        let Ok(head) = read_head(path, 512) else {
+            return false;
+        };
         memmem(&head, b"org.bitcoin") || memmem(&head, UNENCRYPTED_TAG)
     }
 
@@ -60,12 +62,11 @@ pub fn scan_unencrypted(data: &[u8], source_file: &Path) -> Vec<ExtractedKey> {
     while pos + UNENCRYPTED_TAG.len() + 32 <= data.len() {
         if &data[pos..pos + UNENCRYPTED_TAG.len()] == UNENCRYPTED_TAG {
             let start = pos + UNENCRYPTED_TAG.len();
-            if let Ok(priv_bytes) = <[u8; 32]>::try_from(&data[start..start + 32]) {
-                if seen.insert(priv_bytes) {
-                    if let Some(k) = make_key(&priv_bytes, source_file, SourceType::Multibit) {
-                        keys.push(k);
-                    }
-                }
+            if let Ok(priv_bytes) = <[u8; 32]>::try_from(&data[start..start + 32])
+                && seen.insert(priv_bytes)
+                && let Some(k) = make_key(&priv_bytes, source_file, SourceType::Multibit)
+            {
+                keys.push(k);
             }
         }
         pos += 1;
@@ -79,13 +80,12 @@ pub fn find_encrypted_entries(data: &[u8]) -> Vec<([u8; 16], [u8; 48])> {
     while pos + 68 <= data.len() {
         if &data[pos..pos + 2] == ENCRYPTED_IV_TAG
             && &data[pos + 18..pos + 20] == ENCRYPTED_DATA_TAG
-        {
-            if let (Ok(iv), Ok(ct)) = (
+            && let (Ok(iv), Ok(ct)) = (
                 <[u8; 16]>::try_from(&data[pos + 2..pos + 18]),
                 <[u8; 48]>::try_from(&data[pos + 20..pos + 68]),
-            ) {
-                entries.push((iv, ct));
-            }
+            )
+        {
+            entries.push((iv, ct));
         }
         pos += 1;
     }
@@ -97,10 +97,7 @@ pub fn find_scrypt_salt(data: &[u8]) -> Option<[u8; 8]> {
     let tag = b"\x0a\x08";
     let mut start = 0usize;
     while start + 11 < data.len() {
-        if let Some(rel) = data[start..]
-            .windows(2)
-            .position(|w| w == tag)
-        {
+        if let Some(rel) = data[start..].windows(2).position(|w| w == tag) {
             let idx = start + rel;
             if idx + 10 < data.len() && matches!(data[idx + 10], 0x10 | 0x18 | 0x20) {
                 let salt: [u8; 8] = data[idx + 2..idx + 10].try_into().ok()?;
@@ -146,7 +143,8 @@ mod tests {
 
     #[test]
     fn scan_unencrypted_finds_planted_key() {
-        let priv_bytes = priv_hex("0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d");
+        let priv_bytes =
+            priv_hex("0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d");
         let mut blob = Vec::new();
         blob.extend_from_slice(b"org.bitcoin.production");
         blob.extend_from_slice(&[0u8; 16]);

@@ -68,9 +68,7 @@ pub fn privkey_to_wif(privkey: &[u8; 32], compressed: bool) -> Result<String, Cr
 /// Decode a WIF back into raw bytes; returns (privkey, compressed).
 pub fn wif_to_privkey(wif: &str) -> Result<([u8; 32], bool), CryptoError> {
     let pk = PrivateKey::from_wif(wif).map_err(|e| CryptoError::Wif(e.to_string()))?;
-    let bytes: [u8; 32] = pk
-        .inner
-        .secret_bytes();
+    let bytes: [u8; 32] = pk.inner.secret_bytes();
     Ok((bytes, pk.compressed))
 }
 
@@ -120,12 +118,9 @@ pub fn hash160(data: &[u8]) -> [u8; 20] {
 mod tests {
     use super::*;
 
-    const KNOWN_PRIV_HEX: &str =
-        "0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d";
-    const KNOWN_WIF_COMPRESSED: &str =
-        "KwdMAjGmerYanjeui5SHS7JkmpZvVipYvB2LJGU1ZxJwYvP98617";
-    const KNOWN_WIF_UNCOMPRESSED: &str =
-        "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ";
+    const KNOWN_PRIV_HEX: &str = "0c28fca386c7a227600b2fe50b7cae11ec86d3bf1fbe471be89827e19d72aa1d";
+    const KNOWN_WIF_COMPRESSED: &str = "KwdMAjGmerYanjeui5SHS7JkmpZvVipYvB2LJGU1ZxJwYvP98617";
+    const KNOWN_WIF_UNCOMPRESSED: &str = "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ";
 
     fn priv_bytes() -> [u8; 32] {
         let mut out = [0u8; 32];

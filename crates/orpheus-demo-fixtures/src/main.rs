@@ -4,11 +4,10 @@
 //! `fixtures/demo-wallets/` and `fixtures/mock_balances.json` at workspace root.
 
 use std::collections::BTreeMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bip39::{Language, Mnemonic};
 use orpheus_core::crypto::{
     addresses_for_privkey, derive_from_seed, privkey_to_wif, scrypt_aes_key,
@@ -97,7 +96,10 @@ fn main() -> Result<()> {
     )?;
 
     println!("wrote demo fixtures to {}", demo_dir.display());
-    println!("wrote mock balances to {}", fixtures.join("mock_balances.json").display());
+    println!(
+        "wrote mock balances to {}",
+        fixtures.join("mock_balances.json").display()
+    );
     Ok(())
 }
 
@@ -140,8 +142,8 @@ fn build_multibit_encrypted(privs: &[[u8; 32]], password: &str) -> Vec<u8> {
     for (i, p) in privs.iter().enumerate() {
         let iv = [(0x22u8 ^ i as u8); 16];
         type Cbc = cbc::Encryptor<aes::Aes256>;
-        let ct: Vec<u8> = Cbc::new((&aes_key).into(), (&iv).into())
-            .encrypt_padded_vec_mut::<Pkcs7>(p);
+        let ct: Vec<u8> =
+            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec_mut::<Pkcs7>(p);
         blob.extend_from_slice(IV_TAG);
         blob.extend_from_slice(&iv);
         blob.extend_from_slice(DATA_TAG);
