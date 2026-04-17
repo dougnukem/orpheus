@@ -1,41 +1,43 @@
 # Orpheus — developer environment managed by mise (https://mise.jdx.dev).
 #
-# On `cd` into this repo (with mise's shell integration active) the pinned
-# toolchain versions auto-activate. Run `mise install` to fetch them the first
-# time. Tasks below are invoked with `mise run <task>` or `mise <task>`.
+# mise is the single source of truth for tool versions and for every
+# scripted task. The same `mise run <task>` commands are invoked from
+# local shells, git hooks, and CI (see .github/workflows/*.yml).
+#
+# On `cd` into the repo (with mise's shell integration active) the pinned
+# toolchain versions auto-activate. Run `mise install` to fetch them the
+# first time.
 
 [tools]
-rust   = "1.95"
-node   = "22"
-pnpm   = "9"
-# Tauri build prerequisites on macOS are covered by Xcode Command Line Tools;
-# no mise-managed equivalent. Linux users need libwebkit2gtk-4.1-dev etc.
+rust = "1.95"
+node = "22"
+pnpm = "9"
+# Tauri build prerequisites on macOS are Xcode Command Line Tools; on Linux
+# users need libwebkit2gtk-4.1-dev + friends (see .github/workflows/ci.yml).
 
 [env]
 # rustup-managed toolchain always wins over /opt/homebrew/bin/{cargo,rustc}
 _.path = ["{{ env.HOME }}/.cargo/bin"]
 RUST_BACKTRACE = "1"
 RUST_LOG       = "orpheus=info,tower_http=info"
-# Tell the workspace tests to skip anything that needs network by default
-ORPHEUS_OFFLINE = "1"
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Lifecycle hooks
-# ----------------------------------------------------------------------------
-# "enter" fires once per shell when mise activates this project. We use it to
-# install git hooks on the first entry of a fresh clone.
+# ---------------------------------------------------------------------------
+# "enter" fires once per shell when mise activates this project. We use it
+# to install git hooks on the first entry of a fresh clone.
 [hooks]
 enter = "test -x .git/hooks/pre-commit || mise run hooks:install"
 
-# ----------------------------------------------------------------------------
-# Tasks
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Setup / housekeeping
+# ---------------------------------------------------------------------------
 
 [tasks.setup]
 description = "Install all Rust + frontend dependencies"
 run = [
     "cargo fetch --locked || cargo fetch",
-    "cd apps/web && pnpm install --frozen-lockfile || (cd apps/web && pnpm install)",
+    "mise run web:install",
 ]
 
 [tasks."hooks:install"]
@@ -50,62 +52,112 @@ done
 echo "git hooks installed from .githooks/"
 """
 
+# ---------------------------------------------------------------------------
+# Rust
+# ---------------------------------------------------------------------------
+
 [tasks.build]
 description = "Build the whole Rust workspace"
 run = "cargo build --workspace --all-targets"
 
 [tasks.test]
 description = "Run all Rust tests"
-run = "cargo test --workspace"
+run = "cargo test --workspace --locked"
 
 [tasks."test:core"]
 description = "Run orpheus-core tests only"
-run = "cargo test -p orpheus-core"
+run = "cargo test -p orpheus-core --locked"
 
-[tasks.lint]
-description = "Cargo clippy + fmt check + frontend lint"
+[tasks."rust:lint"]
+description = "Cargo fmt --check + clippy"
 run = [
     "cargo fmt --all -- --check",
     "cargo clippy --workspace --all-targets -- -D warnings",
-    "cd apps/web && pnpm lint",
 ]
 
-[tasks.fmt]
-description = "Auto-format Rust and frontend"
-run = [
-    "cargo fmt --all",
-    "cd apps/web && pnpm format",
-]
+[tasks."rust:fmt"]
+description = "Auto-format Rust sources"
+run = "cargo fmt --all"
+
+# ---------------------------------------------------------------------------
+# Frontend (apps/web)
+# ---------------------------------------------------------------------------
+
+[tasks."web:install"]
+description = "Install apps/web dependencies with pnpm"
+dir = "apps/web"
+run = "pnpm install --frozen-lockfile || pnpm install"
 
 [tasks."web:dev"]
-description = "Run the Vite dev server (frontend only, talks to axum on :3000)"
+description = "Vite dev server on :5173 proxying /api -> :3000"
 dir = "apps/web"
 run = "pnpm dev"
 
 [tasks."web:build"]
-description = "Build the React app into apps/web/dist"
+description = "Build React app into apps/web/dist"
 dir = "apps/web"
 run = "pnpm build"
 
+[tasks."web:lint"]
+description = "Run ESLint on the frontend"
+dir = "apps/web"
+run = "pnpm lint"
+
+[tasks."web:typecheck"]
+description = "Run the TS compiler without emitting"
+dir = "apps/web"
+run = "pnpm typecheck"
+
+[tasks."web:fmt"]
+description = "Prettier write for frontend sources"
+dir = "apps/web"
+run = "pnpm format"
+
+# ---------------------------------------------------------------------------
+# Composite / meta tasks
+# ---------------------------------------------------------------------------
+
+[tasks.lint]
+description = "Full lint: Rust fmt/clippy + frontend lint + typecheck"
+depends = ["rust:lint", "web:lint", "web:typecheck"]
+
+[tasks.fmt]
+description = "Auto-format everything"
+depends = ["rust:fmt", "web:fmt"]
+
+[tasks.pre-commit]
+description = "Fast checks for the git pre-commit hook"
+depends = ["rust:lint"]
+
+[tasks.ci]
+description = "What CI runs on every pull request"
+depends = ["lint", "test", "web:build", "cli:demo"]
+
+# ---------------------------------------------------------------------------
+# Running the app
+# ---------------------------------------------------------------------------
+
 [tasks."server:dev"]
-description = "Run the axum server with auto-reload (cargo watch)"
-run = "cargo run -p orpheus-server -- serve --host 127.0.0.1 --port 3000"
+description = "Axum server on 127.0.0.1:3000 serving embedded web/dist"
+run = "cargo run -p orpheus-server -- --host 127.0.0.1 --port 3000"
 
 [tasks.dev]
-description = "Run axum + Vite dev servers together"
-depends = ["web:build"]
+description = "Run axum (:3000) + Vite (:5173) together"
 run = [
-    { task = "web:dev" },
     { task = "server:dev" },
+    { task = "web:dev" },
 ]
-wait_for = "server:dev"
 
 [tasks."cli:demo"]
-description = "Run the bundled offline demo scan"
-run = "cargo run -p orpheus-cli -- demo"
+description = "Run the bundled offline demo scan (synthetic fixtures)"
+run = "cargo run -p orpheus-cli --locked -- demo"
+
+[tasks."demo:fixtures"]
+description = "Regenerate synthetic demo wallet fixtures"
+run = "cargo run -p orpheus-demo-fixtures --locked"
 
 [tasks."tauri:dev"]
-description = "Launch the Tauri desktop app in development mode"
+description = "Tauri v2 desktop app in development mode"
 dir = "crates/orpheus-tauri"
 run = "pnpm tauri dev"
 
@@ -113,10 +165,3 @@ run = "pnpm tauri dev"
 description = "Package the Tauri desktop app for the current platform"
 dir = "crates/orpheus-tauri"
 run = "pnpm tauri build"
-
-[tasks.pre-commit]
-description = "Fast checks suitable for a git pre-commit hook"
-run = [
-    "cargo fmt --all -- --check",
-    "cargo clippy --workspace --all-targets -- -D warnings",
-]
