@@ -1,0 +1,29 @@
+Update the nightly process to publish to cargo a "nightly" version and homebrew cask --HEAD. Add that to the nightly release tag instructions so users know how to install it. 
+
+Also update readme to have instructions to install it from nightly (or stable release when ready). Readme should lead with install then CLI instructions and example output, then web app and architecture / contributing etc content at the bottom
+
+For Cargo Use the next expected version, e.g. v0.1.2-nightly.X (0.1.2-nightly.20260417). This is the semver-correct choice and it matters for a concrete reason: pre-release identifiers sort before the version they suffix. So 0.1.2-nightly.5 < 0.1.2, which is what you want — your nightlies are "heading toward" 0.1.2.
+If you went the other way and tagged nightlies as 0.1.1-nightly.X, they'd sort below 0.1.1, i.e. your nightly would appear older than your already-released stable. Cargo's resolver would never pick it up over the released 0.1.1, and any tool doing version comparison would treat it as a regression.
+The practical wrinkle: you often don't know yet whether the next release will be a patch, minor, or major bump. The standard answer is to pick the smallest plausible bump (usually patch) and just skip over it if reality diverges. If your nightlies say 0.1.2-nightly.* and you end up cutting 0.2.0 next, that's fine — 0.1.2-nightly.47 < 0.2.0 still holds, you just never released a 0.1.2. Some projects bump more aggressively (always to the next minor) if they know they're in feature-development mode between stable releases.
+A couple of implementation notes:
+Use a monotonically increasing identifier in the suffix — a date (0.1.2-nightly.20260417) or a counter (0.1.2-nightly.47). Avoid raw commit SHAs as the primary identifier because they don't sort lexicographically in a useful way. Date + short SHA (0.1.2-nightly.20260417.abc1234) is a nice compromise — sorts right and tells you the exact commit.
+Don't reach for build metadata (the + suffix) for this. 0.1.1+nightly.5 compares equal to 0.1.1 per semver, which is actively misleading. Build metadata is for things like "same version, different build environment," not "newer than stable."
+For Cargo specifically, this plays nicely: cargo install foo ignores pre-releases by default, so publishing 0.1.2-nightly.* to crates.io won't surprise stable users, and opt-in is explicit via --version "0.1.2-nightly". For Homebrew --HEAD installs, the version string matters less since Homebrew tracks HEAD separately, but if you're running a -nightly formula with prebuilt bottles, the same semver logic applies to the tag you're pulling from.
+
+---
+
+<ide_opened_file>The user opened the file /Users/ddaniels/Dropbox/orpheus/.worktrees/dependabot-actions/docs/RELEASING.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+yes
+
+---
+
+yes
+
+---
+
+Yes to A also this cargo work is already getting done in another branch for cargo , rebase from main and update plan
+
+---
+
+<ide_opened_file>The user opened the file /Users/ddaniels/Dropbox/orpheus/crates/orpheus-core/src/extractors/bitcoin_core.rs in the IDE. This may or may not be related to the current task.</ide_opened_file>
+its merged to main rebase
