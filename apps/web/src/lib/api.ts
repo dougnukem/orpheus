@@ -1,4 +1,4 @@
-import type { WalletScanResult, ExtractedKey, DecodedMnemonic } from "@/types";
+import type { WalletScanResult, ExtractedKey, DecodedMnemonic, ScanSummary } from "@/types";
 
 const BASE = "/api";
 
@@ -21,8 +21,12 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export async function scan(files: File[], passwords: string, provider: string)
-    : Promise<{ results: WalletScanResult[] }> {
+export interface ScanReply {
+  results: WalletScanResult[];
+  summary: ScanSummary;
+}
+
+export async function scan(files: File[], passwords: string, provider: string): Promise<ScanReply> {
   const fd = new FormData();
   for (const f of files) fd.append("wallet", f);
   if (passwords) fd.append("passwords", passwords);
@@ -30,7 +34,7 @@ export async function scan(files: File[], passwords: string, provider: string)
   return call("/scan", { method: "POST", body: fd });
 }
 
-export async function demo(): Promise<{ results: WalletScanResult[] }> {
+export async function demo(): Promise<ScanReply> {
   return call("/demo", { method: "POST" });
 }
 

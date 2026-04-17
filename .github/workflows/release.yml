@@ -3,8 +3,14 @@
 # Flow:
 #   1. create-draft: make a draft GitHub Release and emit its tag name.
 #   2. build-cli (matrix) + build-tauri (matrix): build & upload-artifact.
-#   3. publish: download everything, attach to draft, flip draft -> published
-#      atomically. This is the only step where GitHub flips "latest".
+#      Windows + macOS OS-level signing are placeholder steps gated on
+#      secrets — they no-op today but activate automatically when the
+#      secrets exist.
+#   3. publish: download everything, GPG-sign (self-sign), attach to draft,
+#      flip draft -> published atomically. This is the only step where
+#      GitHub flips "latest".
+#   4. publish-crates / publish-cask: downstream fan-out triggered by
+#      workflow_call once the release is live.
 #
 # Nothing is user-visible until `publish` succeeds — if any matrix job
 # fails, the draft stays a draft and can be retried.
@@ -155,7 +161,61 @@ jobs:
           Compress-Archive -Path "staging/$NAME/*" -DestinationPath "staging/$NAME.zip"
           "ARTIFACT=$NAME" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      # Placeholder: Windows binary signing via SignPath Foundation.
+      # Enable once a SignPath project is approved (free for OSS). Requires
+      # secrets.SIGNPATH_API_TOKEN + vars.SIGNPATH_ORG_ID + a project and
+      # policy configured at signpath.io. See docs/RELEASING.md.
+      #
+      # - name: sign windows binaries (SignPath)
+      #   if: runner.os == 'Windows'
+      #   uses: signpath/github-action-submit-signing-request@v1
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+      #     project-slug: orpheus
+      #     signing-policy-slug: release-signing
+      #     github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      #     wait-for-completion: true
+      #     output-artifact-directory: staging/
+
+      # Placeholder: macOS CLI binary signing + notarization via Apple
+      # Developer ID. Enable once APPLE_* secrets are configured. Tauri
+      # bundles are signed separately via tauri-action.
+      #
+      # - name: import apple codesigning cert
+      #   if: runner.os == 'macOS'
+      #   env:
+      #     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      #     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      #   run: |
+      #     KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+      #     security create-keychain -p "" "$KEYCHAIN_PATH"
+      #     security default-keychain -s "$KEYCHAIN_PATH"
+      #     security unlock-keychain -p "" "$KEYCHAIN_PATH"
+      #     TMP_CERT="$RUNNER_TEMP/cert.p12"
+      #     printf '%s' "$APPLE_CERTIFICATE" | base64 -d > "$TMP_CERT"
+      #     security import "$TMP_CERT" -k "$KEYCHAIN_PATH" \
+      #       -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+      #     rm -f "$TMP_CERT"
+      #
+      # - name: codesign + notarize mac cli tarball
+      #   if: runner.os == 'macOS'
+      #   env:
+      #     APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      #     APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      #     APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      #     APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      #   run: |
+      #     codesign --force --options runtime --timestamp \
+      #       --sign "$APPLE_SIGNING_IDENTITY" \
+      #       "staging/$ARTIFACT/orpheus" "staging/$ARTIFACT/orpheus-server"
+      #     ( cd staging && tar -czf "$ARTIFACT.tar.gz" "$ARTIFACT" )
+      #     xcrun notarytool submit "staging/$ARTIFACT.tar.gz" \
+      #       --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" \
+      #       --issuer "$APPLE_API_ISSUER" --wait
+
       - uses: actions/upload-artifact@v7
+        id: upload
         with:
           name: ${{ env.ARTIFACT }}
           path: staging/${{ env.ARTIFACT }}.${{ matrix.archive }}
@@ -194,22 +254,28 @@ jobs:
           workspaces: "crates/orpheus-tauri/src-tauri -> target"
           shared-key: release-tauri-${{ matrix.name }}
 
-      - name: install linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            libssl-dev
+      - uses: ./.github/actions/install-linux-deps
 
       - run: mise run web:install
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- Apple signing env (no-op when secrets are absent). Tauri
+          # picks these up automatically to sign + notarize the .app + .dmg.
+          # Leave blank until Apple Developer Program membership is active.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # Updater signing (Tauri's own minisign; separate from OS signing).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: crates/orpheus-tauri/src-tauri
           args: ${{ matrix.args }}
@@ -228,6 +294,10 @@ jobs:
             -not -path "*/deps/*" -not -path "*/build/*" \
             -exec cp {} tauri-output/ \;
           ls -la tauri-output/
+
+      # Placeholder: sign Windows MSI/EXE via SignPath (see build-cli).
+      # When enabled, submit tauri-output/* to SignPath and overwrite with
+      # signed versions before upload-artifact below.
 
       - uses: actions/upload-artifact@v7
         with:
@@ -253,12 +323,18 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: list collected artifacts + checksums
+      - name: list collected artifacts
         shell: bash
-        run: |
-          ls -la dist/
-          ( cd dist && shasum -a 256 * > SHA256SUMS ) || true
-          cat dist/SHA256SUMS || true
+        run: ls -la dist/
+
+      - name: sign artifacts with gpg
+        uses: ./.github/actions/sign-artifacts
+        with:
+          artifacts-dir: dist
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+          strict: "true"
 
       - name: attach artifacts + flip to published
         env:
@@ -267,3 +343,19 @@ jobs:
         run: |
           gh release upload "$TAG" dist/* --clobber
           gh release edit "$TAG" --draft=false --latest
+
+  publish-crates:
+    name: publish crates.io
+    needs: [create-draft, publish]
+    uses: ./.github/workflows/publish-crates.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.create-draft.outputs.tag }}
+
+  publish-cask:
+    name: publish homebrew cask
+    needs: [create-draft, publish]
+    uses: ./.github/workflows/publish-cask.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.create-draft.outputs.tag }}

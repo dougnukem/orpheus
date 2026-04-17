@@ -33,6 +33,12 @@ wallets/
 passwords*.txt
 !fixtures/**/passwords*.txt
 
+# act local secret files — never commit
+.secrets
+.secrets.*
+!.secrets.example
+.actrc.local
+
 # Real wallet artifacts — only fixtures/ are allowed in git
 *.wallet
 *.dat
@@ -49,3 +55,4 @@ CHANGELOG.md
 
 # Git worktrees
 .worktrees/
+.superpowers/

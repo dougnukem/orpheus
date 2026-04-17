@@ -6,7 +6,7 @@ import { Dropzone } from "@/components/Dropzone";
 import { Field, FieldLabel, PrimaryButton, Select, TextArea, TextInput } from "@/components/Field";
 import { ResultsView } from "@/components/ResultsView";
 import * as api from "@/lib/api";
-import type { DecodedMnemonic, ExtractedKey, TabId, WalletScanResult } from "@/types";
+import type { DecodedMnemonic, ExtractedKey, ScanSummary, TabId, WalletScanResult } from "@/types";
 import { cn } from "@/lib/utils";
 
 const VERSION = "0.1.0";
@@ -21,14 +21,20 @@ function useStatus() {
 export default function App() {
   const [tab, setTab] = useState<TabId>("scan");
   const [results, setResults] = useState<WalletScanResult[] | null>(null);
+  const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);
+
+  const setScan = (r: { results: WalletScanResult[]; summary: ScanSummary }) => {
+    setResults(r.results);
+    setSummary(r.summary);
+    setTab("results");
+  };
 
   const runDemo = async () => {
     setDemoBusy(true);
     try {
       const r = await api.demo();
-      setResults(r.results);
-      setTab("results");
+      setScan(r);
     } finally {
       setDemoBusy(false);
     }
@@ -43,19 +49,18 @@ export default function App() {
         <Descent active={tab} onSelect={setTab} onDemo={runDemo} demoBusy={demoBusy} />
 
         <section className="relative min-h-[60vh]">
-          {tab === "scan" && <ScanPanel onResults={(r) => { setResults(r); setTab("results"); }} />}
-          {tab === "extract" && (
-            <ExtractPanel onResults={(r) => { setResults(r); setTab("results"); }} />
-          )}
+          {tab === "scan" && <ScanPanel onScan={setScan} />}
+          {tab === "extract" && <ExtractPanel onScan={setScan} />}
           {tab === "mnemonic" && (
             <MnemonicPanel
               onKeys={(keys) => {
                 setResults([{ source_file: "(mnemonic)", source_type: "bip39", keys }]);
+                setSummary(null);
                 setTab("results");
               }}
             />
           )}
-          {tab === "results" && <ResultsPanel results={results} />}
+          {tab === "results" && <ResultsPanel results={results} summary={summary} />}
         </section>
       </main>
 
@@ -104,7 +109,7 @@ function StatusLine({ status }: { status: Status }) {
   );
 }
 
-function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }) {
+function ScanPanel({ onScan }: { onScan: (r: api.ScanReply) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [passwords, setPasswords] = useState("");
   const [provider, setProvider] = useState("blockstream");
@@ -119,7 +124,7 @@ function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }
     setStatus({ kind: "busy", text: "descending…" });
     try {
       const body = await api.scan(files, passwords, provider);
-      onResults(body.results);
+      onScan(body);
       setStatus({ kind: "ok", text: `returned with ${body.results.length} wallet(s)` });
     } catch (err) {
       setStatus({ kind: "err", text: (err as Error).message });
@@ -168,7 +173,7 @@ function ScanPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }
   );
 }
 
-function ExtractPanel({ onResults }: { onResults: (r: WalletScanResult[]) => void }) {
+function ExtractPanel({ onScan }: { onScan: (r: api.ScanReply) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [passwords, setPasswords] = useState("");
   const { status, setStatus } = useStatus();
@@ -181,8 +186,8 @@ function ExtractPanel({ onResults }: { onResults: (r: WalletScanResult[]) => voi
     }
     setStatus({ kind: "busy", text: "opening…" });
     try {
-      const body = await api.scan(files, passwords, "mock");
-      onResults(body.results);
+      const body = await api.scan(files, passwords, "blockstream");
+      onScan(body);
       setStatus({ kind: "ok", text: "done" });
     } catch (err) {
       setStatus({ kind: "err", text: (err as Error).message });
@@ -325,7 +330,13 @@ function MnemonicPanel({ onKeys }: { onKeys: (keys: ExtractedKey[]) => void }) {
   );
 }
 
-function ResultsPanel({ results }: { results: WalletScanResult[] | null }) {
+function ResultsPanel({
+  results,
+  summary,
+}: {
+  results: WalletScanResult[] | null;
+  summary: ScanSummary | null;
+}) {
   return (
     <article className="panel-enter">
       <PanelHead
@@ -337,7 +348,7 @@ function ResultsPanel({ results }: { results: WalletScanResult[] | null }) {
             : "Nothing retrieved yet. Begin with a scan."
         }
       />
-      <ResultsView results={results} />
+      <ResultsView results={results} summary={summary} />
     </article>
   );
 }
