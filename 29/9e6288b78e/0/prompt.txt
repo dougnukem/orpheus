@@ -1,0 +1,11 @@
+When running this localhost I should be able to select a directory on the localhost to scan (not just a file picker), the file picker should be the secondary option, with selecting the local directory is the primary
+
+---
+
+<ide_opened_file>The user opened the file /temp/readonly/Bash tool output (ulrarq) in the IDE. This may or may not be related to the current task.</ide_opened_file>
+A keep planned order lets merge and continue
+
+---
+
+<ide_opened_file>The user opened the file /temp/readonly/command (pw32t3) in the IDE. This may or may not be related to the current task.</ide_opened_file>
+merge and continue
