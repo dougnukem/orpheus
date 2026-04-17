@@ -286,14 +286,25 @@ jobs:
       - name: collect tauri bundles
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p tauri-output
-          find crates/orpheus-tauri/src-tauri/target -type f \
-            \( -name "*.dmg" -o -name "*.app.tar.gz" \
-               -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
-               -o -name "*.msi" -o -name "*.exe" \) \
-            -not -path "*/deps/*" -not -path "*/build/*" \
+          # Cargo workspace: bundles land in ./target/release/bundle/...,
+          # NOT in crates/orpheus-tauri/src-tauri/target. Tauri emits
+          # duplicates (Orpheus_0.1.0_amd64.deb AND lowercase
+          # orpheus_0.1.0_amd64.deb from the Cargo crate name); keep only
+          # the productName-cased ones.
+          find target/release/bundle -type f \
+            \( -name "Orpheus_*.dmg"    -o -name "Orpheus*.app.tar.gz" \
+               -o -name "Orpheus_*.AppImage" \
+               -o -name "Orpheus_*.deb" -o -name "Orpheus-*.rpm" \
+               -o -name "Orpheus_*.msi" -o -name "Orpheus_*.exe" \) \
             -exec cp {} tauri-output/ \;
           ls -la tauri-output/
+          if [ -z "$(ls -A tauri-output/)" ]; then
+            echo "::error::no Tauri bundles found under target/release/bundle"
+            ls -R target/release/bundle 2>&1 || true
+            exit 1
+          fi
 
       # Placeholder: sign Windows MSI/EXE via SignPath (see build-cli).
       # When enabled, submit tauri-output/* to SignPath and overwrite with
