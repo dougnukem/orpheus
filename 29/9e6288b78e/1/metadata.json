@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "299e6288b78e",
+  "session_id": "f1bd89e0-d8aa-42cd-81b0-266debb15da5",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T21:10:01.436942Z",
+  "branch": "feat/head-cli-formula",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/publish-cask-head.yml",
+    "packaging/homebrew/README.md",
+    "packaging/homebrew/orpheus-head-app.rb.template",
+    "packaging/homebrew/orpheus-head.rb.formula.template",
+    "packaging/homebrew/orpheus-head.rb.template"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "0e147131deff",
+  "checkpoint_transcript_start": 398,
+  "transcript_lines_at_start": 398,
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 131516,
+    "cache_read_tokens": 3499441,
+    "output_tokens": 26547,
+    "api_call_count": 27
+  },
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T21:10:01.402822Z",
+    "agent_lines": 207,
+    "agent_removed": 67,
+    "human_added": 39,
+    "human_modified": 22,
+    "human_removed": 0,
+    "total_committed": 268,
+    "total_lines_changed": 335,
+    "agent_percentage": 81.7910447761194,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
