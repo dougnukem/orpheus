@@ -191,10 +191,12 @@ Review takes ~1–2 weeks.
 1. On signpath.io: create project `orpheus`, signing policy
    `release-signing`, and link it to this repo.
 2. Create an API token (`Settings → API Tokens → Add`) and store it:
+
    ```bash
    gh secret set  SIGNPATH_API_TOKEN --body "<token>"
    gh variable set SIGNPATH_ORG_ID   --body "<org-uuid>"
    ```
+
 3. Uncomment the `signpath/github-action-submit-signing-request@v1` steps
    in `release.yml` (both `build-cli` and `build-tauri` jobs).
 4. Remove any Windows-signing disclaimers from the README.
@@ -219,6 +221,7 @@ commented-out block in `build-cli`.
    [appstoreconnect.apple.com/access/integrations/api](https://appstoreconnect.apple.com/access/integrations/api).
    Download the `.p8`, note the Key ID and Issuer ID.
 4. Populate secrets:
+
    ```bash
    base64 -i cert.p12 | gh secret set APPLE_CERTIFICATE
    gh secret set APPLE_CERTIFICATE_PASSWORD --body "<p12 password>"
@@ -228,6 +231,7 @@ commented-out block in `build-cli`.
    gh secret set APPLE_API_KEY_ID           --body "<KEY_ID>"
    gh secret set APPLE_API_ISSUER           --body "<ISSUER_UUID>"
    ```
+
 5. Uncomment the CLI signing/notarization blocks in `release.yml`
    (`build-cli`), and remove the Gatekeeper `caveats` block from both
    Homebrew cask templates in `packaging/homebrew/`.
@@ -265,7 +269,7 @@ itself is off until `tauri.conf.json` references the public key.
 | `SIGNPATH_ORG_ID`                    | variable | Windows signing      | org UUID from signpath.io               |
 | `APPLE_CERTIFICATE`                  | secret   | Apple signing        | base64 .p12                             |
 | `APPLE_CERTIFICATE_PASSWORD`         | secret   | Apple signing        |                                         |
-| `APPLE_SIGNING_IDENTITY`             | secret   | Apple signing        | e.g. `Developer ID Application: Foo (...)`|
+| `APPLE_SIGNING_IDENTITY`             | secret   | Apple signing        | e.g. `Developer ID Application: ...`    |
 | `APPLE_TEAM_ID`                      | secret   | Apple signing        |                                         |
 | `APPLE_ID` / `APPLE_PASSWORD`        | secret   | Apple legacy notary  | prefer API key below                    |
 | `APPLE_API_KEY`                      | secret   | Apple notarization   | base64 .p8                              |
@@ -273,6 +277,36 @@ itself is off until `tauri.conf.json` references the public key.
 | `APPLE_API_ISSUER`                   | secret   | Apple notarization   |                                         |
 | `TAURI_SIGNING_PRIVATE_KEY`          | secret   | Tauri updater        |                                         |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | secret   | Tauri updater        |                                         |
+
+## Running workflows locally with `act`
+
+The publishing workflows are `ubuntu-latest` jobs, so
+[nektos/act](https://github.com/nektos/act) can run them in a local
+Docker container — useful for smoke-testing secret wiring and template
+rendering before pushing a real tag.
+
+```bash
+brew install act
+cp .secrets.example .secrets      # gitignored; fill in real values
+# Cask dry-run against a ref that exists (main) but no release artifacts.
+# Validates HOMEBREW_TAP_TOKEN checkout works; render step fails as expected.
+act workflow_dispatch \
+  -W .github/workflows/publish-cask.yml \
+  --input tag=main
+```
+
+Defaults for `act` (runner image + `--secret-file .secrets`) are wired up
+in the repo's [.actrc](../.actrc). Personal overrides go in
+`.actrc.local` (gitignored).
+
+If you use 1Password, skip the plaintext `.secrets` file entirely:
+
+```bash
+op inject -i .secrets.op | act workflow_dispatch \
+  -W .github/workflows/publish-cask.yml \
+  --input tag=main \
+  --secret-file /dev/stdin
+```
 
 ## Troubleshooting
 
