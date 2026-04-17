@@ -6,7 +6,7 @@ import { Dropzone } from "@/components/Dropzone";
 import { Field, FieldLabel, PrimaryButton, Select, TextArea, TextInput } from "@/components/Field";
 import { ResultsView } from "@/components/ResultsView";
 import * as api from "@/lib/api";
-import type { DecodedMnemonic, ExtractedKey, ScanSummary, TabId, WalletScanResult } from "@/types";
+import type { DecodedMnemonic, ExtractedKey, Provider, ScanSummary, TabId, WalletScanResult } from "@/types";
 import { cn } from "@/lib/utils";
 
 const VERSION = "0.1.0";
@@ -24,7 +24,7 @@ export default function App() {
   const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);
 
-  const setScan = (r: { results: WalletScanResult[]; summary: ScanSummary }) => {
+  const setScan = (r: { results: WalletScanResult[]; summary: ScanSummary | null }) => {
     setResults(r.results);
     setSummary(r.summary);
     setTab("results");
@@ -50,7 +50,8 @@ export default function App() {
 
         <section className="relative min-h-[60vh]">
           {tab === "scan" && <ScanPanel onScan={setScan} />}
-          {tab === "extract" && <ExtractPanel onScan={setScan} />}
+          {/* legacy placeholder — "extract" tab removed from TabId, replaced in Task 3.1 */}
+          {false && <ExtractPanel onScan={setScan} />}
           {tab === "mnemonic" && (
             <MnemonicPanel
               onKeys={(keys) => {
@@ -123,7 +124,7 @@ function ScanPanel({ onScan }: { onScan: (r: api.ScanReply) => void }) {
     }
     setStatus({ kind: "busy", text: "descending…" });
     try {
-      const body = await api.scan(files, passwords, provider);
+      const body = await api.scan(files, passwords, provider as Provider);
       onScan(body);
       setStatus({ kind: "ok", text: `returned with ${body.results.length} wallet(s)` });
     } catch (err) {

@@ -57,4 +57,15 @@ export interface DecodedMnemonic {
   version: string;
 }
 
-export type TabId = "scan" | "extract" | "mnemonic" | "results";
+export type TabId = "scan" | "mnemonic" | "results";
+
+export interface Tx {
+  txid: string;
+  time: number;
+  value_sat: number;
+  fee_sat: number | null;
+  confirmations: number | null;
+  block_height: number | null;
+}
+
+export type Provider = "blockstream" | "blockchain" | "mock" | "none";

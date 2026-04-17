@@ -1,11 +1,11 @@
 import type { TabId } from "@/types";
 import { cn } from "@/lib/utils";
 
+// legacy placeholder — "extract" step removed from TabId, nav renumbered; full rewrite in Task 3.1
 const STEPS: { id: TabId; num: string; label: string; sub: string }[] = [
   { id: "scan",     num: "I",   label: "Scan",     sub: "directory of wallets" },
-  { id: "extract",  num: "II",  label: "Extract",  sub: "single wallet file" },
-  { id: "mnemonic", num: "III", label: "Mnemonic", sub: "seed phrase derivation" },
-  { id: "results",  num: "IV",  label: "Results",  sub: "retrieved keys & balances" },
+  { id: "mnemonic", num: "II",  label: "Mnemonic", sub: "seed phrase derivation" },
+  { id: "results",  num: "III", label: "Results",  sub: "retrieved keys & balances" },
 ];
 
 interface Props {

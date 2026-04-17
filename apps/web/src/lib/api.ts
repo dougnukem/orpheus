@@ -1,9 +1,29 @@
-import type { WalletScanResult, ExtractedKey, DecodedMnemonic, ScanSummary } from "@/types";
+import type {
+  DecodedMnemonic,
+  ExtractedKey,
+  Provider,
+  ScanSummary,
+  Tx,
+  WalletScanResult,
+} from "@/types";
+import { isTauri, tauriInvoke } from "./tauri";
 
 const BASE = "/api";
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, init);
+export interface ScanReply {
+  results: WalletScanResult[];
+  summary: ScanSummary | null;
+}
+
+export interface MnemonicReply {
+  keys?: ExtractedKey[];
+  decoded?: DecodedMnemonic;
+}
+
+async function httpJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = init
+    ? await fetch(`${BASE}${path}`, init)
+    : await fetch(`${BASE}${path}`);
   const text = await r.text();
   let body: unknown;
   try {
@@ -13,7 +33,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!r.ok) {
     const msg =
-      body && typeof body === "object" && "error" in body
+      body && typeof body === "object" && body !== null && "error" in body
         ? String((body as { error: unknown }).error)
         : r.statusText;
     throw new Error(msg);
@@ -21,21 +41,35 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export interface ScanReply {
-  results: WalletScanResult[];
-  summary: ScanSummary;
-}
-
-export async function scan(files: File[], passwords: string, provider: string): Promise<ScanReply> {
+export async function scan(
+  files: File[],
+  passwords: string,
+  provider: Provider,
+): Promise<ScanReply> {
   const fd = new FormData();
   for (const f of files) fd.append("wallet", f);
   if (passwords) fd.append("passwords", passwords);
   fd.append("provider", provider);
-  return call("/scan", { method: "POST", body: fd });
+  return httpJson("/scan", { method: "POST", body: fd });
 }
 
-export async function demo(): Promise<ScanReply> {
-  return call("/demo", { method: "POST" });
+export async function scanDirectory(
+  path: string,
+  passwords: string,
+  provider: Provider,
+): Promise<ScanReply> {
+  if (isTauri()) {
+    return tauriInvoke<ScanReply>("scan_directory", {
+      path,
+      passwords,
+      provider,
+    });
+  }
+  return httpJson("/scan-directory", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, passwords, provider }),
+  });
 }
 
 export async function mnemonic(payload: {
@@ -44,10 +78,35 @@ export async function mnemonic(payload: {
   passphrase?: string;
   gap_limit?: number;
   wordlist?: string;
-}): Promise<{ keys?: ExtractedKey[]; decoded?: DecodedMnemonic }> {
-  return call("/mnemonic", {
+}): Promise<MnemonicReply> {
+  if (isTauri()) {
+    return tauriInvoke<MnemonicReply>("mnemonic_cmd", { payload });
+  }
+  return httpJson("/mnemonic", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export async function demo(): Promise<ScanReply> {
+  return httpJson("/demo", { method: "POST" });
+}
+
+export async function addressTransactions(
+  address: string,
+  provider: Provider,
+  limit = 50,
+): Promise<Tx[]> {
+  if (isTauri()) {
+    return tauriInvoke<Tx[]>("address_transactions", {
+      address,
+      provider,
+      limit,
+    });
+  }
+  const qs = new URLSearchParams({ provider, limit: String(limit) });
+  return httpJson(
+    `/address/${encodeURIComponent(address)}/transactions?${qs}`,
+  );
 }
