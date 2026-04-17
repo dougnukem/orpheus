@@ -11,7 +11,7 @@ const TABS = [
 const PROVIDER_LABEL: Record<Provider, string> = {
   blockstream: "blockstream.info",
   blockchain: "blockchain.info",
-  mock: "mock fixtures",
+  mock: "offline (mock)",
   none: "offline",
 };
 
