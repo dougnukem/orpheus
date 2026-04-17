@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export interface Column<T> {
-  key: string;
+  key: keyof T & string;
   header: ReactNode;
   align?: "left" | "right";
   render?: (row: T) => ReactNode;
@@ -29,6 +29,12 @@ export function Table<T>({
 
   const sortable = (col: Column<T>) => col.sortValue != null;
 
+  const ariaSortFor = (col: Column<T>) => {
+    if (!sortable(col)) return undefined;
+    if (sortKey !== col.key) return "none" as const;
+    return sortDir === "asc" ? ("ascending" as const) : ("descending" as const);
+  };
+
   const sorted = (() => {
     if (!sortKey) return rows;
     const col = columns.find((c) => c.key === sortKey);
@@ -52,6 +58,11 @@ export function Table<T>({
     }
   };
 
+  const headerBase =
+    "text-[10px] uppercase tracking-[0.08em] font-normal " +
+    "text-[var(--color-text-faint)] border-b border-[var(--color-border)] " +
+    "py-2 px-2";
+
   return (
     <table className={cn("w-full text-sm border-collapse", className)}>
       <thead>
@@ -60,24 +71,31 @@ export function Table<T>({
             <th
               key={c.key}
               scope="col"
-              aria-sort={
-                sortKey === c.key
-                  ? sortDir === "asc"
-                    ? "ascending"
-                    : "descending"
-                  : undefined
-              }
-              onClick={sortable(c) ? () => toggleSort(c.key) : undefined}
+              aria-sort={ariaSortFor(c)}
               className={cn(
-                "text-[10px] uppercase tracking-[0.08em] font-normal " +
-                  "text-[var(--color-text-faint)] border-b border-[var(--color-border)] " +
-                  "py-2 px-2",
+                headerBase,
                 c.align === "right" ? "text-right" : "text-left",
-                sortable(c) &&
-                  "cursor-pointer select-none hover:text-[var(--color-text)]",
               )}
             >
-              {c.header}
+              {sortable(c) ? (
+                <button
+                  type="button"
+                  onClick={() => toggleSort(c.key)}
+                  className={cn(
+                    "inline-flex items-center gap-1 cursor-pointer select-none " +
+                      "bg-transparent border-0 p-0 m-0 font-inherit " +
+                      "text-[var(--color-text-faint)] hover:text-[var(--color-text)] " +
+                      "focus-visible:outline focus-visible:outline-2 " +
+                      "focus-visible:outline-offset-2 " +
+                      "focus-visible:outline-[var(--color-accent)]",
+                    c.align === "right" && "w-full justify-end",
+                  )}
+                >
+                  {c.header}
+                </button>
+              ) : (
+                c.header
+              )}
             </th>
           ))}
         </tr>
@@ -100,9 +118,7 @@ export function Table<T>({
                   c.align === "right" ? "text-right" : "text-left",
                 )}
               >
-                {c.render
-                  ? c.render(r)
-                  : ((r as Record<string, unknown>)[c.key] as ReactNode)}
+                {c.render ? c.render(r) : (r[c.key] as ReactNode)}
               </td>
             ))}
           </tr>
