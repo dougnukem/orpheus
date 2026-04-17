@@ -10,6 +10,8 @@ interface Props extends ComponentProps<"button"> {
 const base =
   "inline-flex items-center justify-center gap-2 rounded-[5px] px-3 py-1.5 " +
   "text-sm font-medium transition-colors " +
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 " +
+  "focus-visible:outline-[var(--color-accent)] " +
   "disabled:opacity-50 disabled:cursor-not-allowed";
 
 const variants: Record<Variant, string> = {

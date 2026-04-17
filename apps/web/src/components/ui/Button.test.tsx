@@ -36,4 +36,16 @@ describe("Button", () => {
     const { container } = render(<Button variant="success">Import</Button>);
     expect(container.firstChild).toHaveClass("bg-[var(--color-success)]");
   });
+
+  it("applies focus-visible outline classes", () => {
+    const { container } = render(<Button>Scan</Button>);
+    // Note: tailwind-merge collapses the bare `focus-visible:outline` into
+    // the more specific `focus-visible:outline-2`/`outline-[color]`. Those
+    // three together still render the 2px accent outline on keyboard focus.
+    expect(container.firstChild).toHaveClass(
+      "focus-visible:outline-2",
+      "focus-visible:outline-offset-2",
+      "focus-visible:outline-[var(--color-accent)]",
+    );
+  });
 });
