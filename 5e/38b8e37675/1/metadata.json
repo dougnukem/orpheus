@@ -1,0 +1,86 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "5e38b8e37675",
+  "session_id": "46bbbfcb-9aea-4a27-9bb9-807af1488a00",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T08:15:22.83178Z",
+  "branch": "feat/balance-received-sent",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "crates/orpheus-core/src/balance.rs",
+    "crates/orpheus-core/src/extractors/bip39_mnemonic.rs",
+    "crates/orpheus-core/src/extractors/bitcoin_core.rs",
+    "crates/orpheus-core/src/extractors/blockchain_com.rs",
+    "crates/orpheus-core/src/extractors/encrypted.rs",
+    "crates/orpheus-core/src/extractors/wallet_dump.rs",
+    "crates/orpheus-core/src/lib.rs",
+    "crates/orpheus-core/src/models.rs"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fb0ad6cece15",
+  "token_usage": {
+    "input_tokens": 690,
+    "cache_creation_tokens": 113514,
+    "cache_read_tokens": 917845,
+    "output_tokens": 11930,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T08:15:22.815262Z",
+    "agent_lines": 172,
+    "agent_removed": 37,
+    "human_added": 6,
+    "human_modified": 21,
+    "human_removed": 0,
+    "total_committed": 197,
+    "total_lines_changed": 236,
+    "agent_percentage": 88.5593220338983,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 16,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "crates/orpheus-core/src/models.rs": 16
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 17,
+      "user_lines_removed": 19,
+      "agent_lines_added": 208,
+      "agent_lines_removed": 37,
+      "user_added_per_file": {
+        "crates/orpheus-cli/src/main.rs": 1,
+        "crates/orpheus-core/src/balance.rs": 16
+      },
+      "user_removed_per_file": {
+        "crates/orpheus-cli/src/main.rs": 1,
+        "crates/orpheus-core/src/balance.rs": 18
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 86,
+      "user_lines_removed": 20,
+      "agent_lines_added": 232,
+      "agent_lines_removed": 62,
+      "user_added_per_file": {
+        "crates/orpheus-cli/src/main.rs": 83,
+        "crates/orpheus-core/src/lib.rs": 3
+      },
+      "user_removed_per_file": {
+        "crates/orpheus-cli/src/main.rs": 19,
+        "crates/orpheus-core/src/lib.rs": 1
+      }
+    }
+  ]
+}
