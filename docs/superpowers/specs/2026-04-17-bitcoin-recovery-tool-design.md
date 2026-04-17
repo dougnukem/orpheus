@@ -1,8 +1,12 @@
-# Bitcoin Recovery Tool - Design Spec
+# Orpheus - Design Spec
+
+> **Orpheus** — Recover lost cryptocurrency from forgotten wallets
+>
+> *Descended into the underworld to recover what was lost.*
 
 ## Overview
 
-A pip-installable Python CLI + local web UI tool for scanning, extracting, and checking balances of old Bitcoin wallets. Helps users recover funds from wallet files dating back to 2012-2015 era.
+A pip-installable Python CLI + local web UI tool for scanning, extracting, and checking balances of old cryptocurrency wallets. Starts with Bitcoin wallet support (2012-2016 era), designed to extend to other cryptocurrencies.
 
 **Key principle:** All processing happens locally. Private keys never leave the user's machine. Network calls are limited to public address balance lookups (which only transmit public addresses, not keys).
 
@@ -24,7 +28,7 @@ People who have old Bitcoin wallet files, seed phrases, or recovery mnemonics fr
 ## Architecture
 
 ```
-bitcoin-recovery/
+orpheus/
 ├── pyproject.toml
 ├── Dockerfile
 ├── README.md
@@ -32,9 +36,9 @@ bitcoin-recovery/
 │   ├── security.md             # Security best practices
 │   └── password-recovery.md    # Password recovery techniques guide
 ├── src/
-│   └── bitcoin_recovery/
+│   └── orpheus/
 │       ├── __init__.py
-│       ├── __main__.py         # python -m bitcoin_recovery
+│       ├── __main__.py         # python -m orpheus
 │       ├── cli.py              # CLI entry point (click)
 │       ├── scanner.py          # Directory scanning - finds wallet files
 │       ├── extractors/
@@ -71,40 +75,40 @@ bitcoin-recovery/
 
 ```bash
 # Install
-uvx bitcoin-recovery
+uvx orpheus
 
 # Or install into project
-uv pip install bitcoin-recovery
+uv pip install orpheus
 
 # Scan a directory for wallet files, extract keys, check balances
-bitcoin-recovery scan /path/to/wallets
+orpheus scan /path/to/wallets
 
 # Extract keys from a specific wallet file
-bitcoin-recovery extract wallet.dat
+orpheus extract wallet.dat
 
 # Extract with password list for encrypted wallets
-bitcoin-recovery extract wallet.dat --passwords passwords.txt
+orpheus extract wallet.dat --passwords passwords.txt
 
 # Decode a blockchain.com legacy mnemonic
-bitcoin-recovery decode-mnemonic "bought purple insane contended ..."
+orpheus decode-mnemonic "bought purple insane contended ..."
 
 # Derive keys from BIP39 seed phrase
-bitcoin-recovery derive-bip39 "excuse abandon plug ..." --path "m/0'/0/0"
+orpheus derive-bip39 "excuse abandon plug ..." --path "m/0'/0/0"
 
 # Derive with common Breadwallet paths
-bitcoin-recovery derive-bip39 "excuse abandon plug ..." --wallet-type breadwallet
+orpheus derive-bip39 "excuse abandon plug ..." --wallet-type breadwallet
 
 # Check balances for previously extracted keys
-bitcoin-recovery check-balance results.json
+orpheus check-balance results.json
 
 # Launch local web UI
-bitcoin-recovery serve --port 8080
+orpheus serve --port 8080
 
 # Offline mode - extract only, no network calls
-bitcoin-recovery scan /path --offline
+orpheus scan /path --offline
 
 # Ephemeral Docker mode
-bitcoin-recovery docker-run /path/to/wallets
+orpheus docker-run /path/to/wallets
 ```
 
 ## Extractor Interface
@@ -229,7 +233,7 @@ The best existing tool for Bitcoin wallet password recovery. Our guide documents
 
 **Pattern generation:**
 For users who remember partial passwords:
-- `bitcoin-recovery generate-passwords --pattern "Monkey{4digits}{punct}"` outputs a wordlist
+- `orpheus generate-passwords --pattern "Monkey{4digits}{punct}"` outputs a wordlist
 - Feed output to `--passwords` flag or to btcrecover
 
 ## Security Best Practices
@@ -238,8 +242,8 @@ For users who remember partial passwords:
 
 ```dockerfile
 FROM python:3.12-slim
-RUN pip install bitcoin-recovery
-ENTRYPOINT ["bitcoin-recovery"]
+RUN pip install orpheus
+ENTRYPOINT ["orpheus"]
 ```
 
 ```bash
@@ -247,14 +251,14 @@ ENTRYPOINT ["bitcoin-recovery"]
 docker run --rm -it \
   -v /path/to/wallets:/wallets:ro \
   -p 127.0.0.1:8080:8080 \
-  bitcoin-recovery serve /wallets
+  orpheus serve /wallets
 
 # Offline mode in Docker (no network except localhost web UI)
 docker run --rm -it \
   --network none \
   -v /path/to/wallets:/wallets:ro \
   -v /tmp/results:/results \
-  bitcoin-recovery scan /wallets --offline --output /results/keys.json
+  orpheus scan /wallets --offline --output /results/keys.json
 ```
 
 Properties:
