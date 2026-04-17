@@ -9,8 +9,9 @@
 Orpheus is a Rust + Tauri v2 tool for extracting private keys from old Bitcoin
 wallet files (Bitcoin Core `wallet.dat`, MultiBit Classic `.wallet`, Bitcoin
 Core `dumpwallet` output, BIP39 seed phrases, and blockchain.com legacy
-mnemonics). It ships as a single-binary CLI, an HTTP server hosting an embedded
-React UI, and a native desktop app — all sharing the same extraction core.
+mnemonics). One `orpheus` binary delivers the CLI, an embedded React UI via
+`orpheus serve`, and — paired with the Tauri shell — a native desktop app,
+all sharing the same extraction core.
 
 ## Architecture
 
@@ -21,16 +22,16 @@ orpheus/
 ├── rust-toolchain.toml
 ├── crates/
 │   ├── orpheus-core/       # extractors, crypto, balance, scanner
-│   ├── orpheus-cli/        # clap CLI: scan / extract / mnemonic / demo
-│   ├── orpheus-server/     # axum + rust-embed: hosts apps/web/dist + /api
+│   ├── orpheus-cli/        # clap CLI: scan / extract / mnemonic / demo / serve
+│   │                       # `serve` bundles axum + rust-embed for apps/web/dist + /api
 │   ├── orpheus-tauri/      # Tauri v2 desktop shell; same API, no sidecar
 │   └── orpheus-demo-fixtures/
 └── apps/
     └── web/                # Vite + React 19 + TS + Tailwind v4 + shadcn
 ```
 
-The `orpheus-core` crate is the single source of truth. Every frontend
-(`cli`, `server`, `tauri`) delegates to it.
+The `orpheus-core` crate is the single source of truth. The `orpheus`
+CLI and the Tauri shell both delegate to it.
 
 ## Getting started
 
@@ -57,7 +58,7 @@ mise run test            # cargo test --workspace
 mise run lint            # fmt --check + clippy + pnpm lint
 mise run fmt             # cargo fmt + prettier
 mise run cli:demo        # offline demo via CLI
-mise run server:dev      # axum server on 127.0.0.1:3000
+mise run server:dev      # `orpheus serve` on 127.0.0.1:3000
 mise run web:dev         # Vite dev server on :5173 proxying /api → :3000
 mise run dev             # both above together
 mise run tauri:dev       # desktop app in development mode
@@ -129,9 +130,11 @@ for the conventions we enforce.
 Artifacts published for every tagged release:
 
 - `orpheus-vX.Y.Z-{linux,macos,windows}-{x86_64,aarch64}.{tar.gz,zip}` —
-  standalone `orpheus` CLI + `orpheus-server` binary
+  standalone `orpheus` binary (CLI commands + `orpheus serve`)
 - Tauri desktop bundles (`.dmg` universal macOS, `.AppImage` + `.deb` Linux,
-  `.msi` Windows)
+  `.msi` Windows). The desktop bundle also embeds the `orpheus` CLI as a
+  Tauri externalBin resource, so `brew install --cask orpheus` on macOS
+  delivers both the app *and* an `orpheus` on `$PATH`.
 - `SHA256SUMS` for integrity verification
 
 ## Security

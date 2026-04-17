@@ -34,11 +34,11 @@ git push origin main --follow-tags
 The `release.yml` workflow will:
 
 1. Create a draft GitHub release.
-2. Build CLI + server binaries for 5 targets; build Tauri bundles for
-   macOS (universal), Linux x86_64, Windows x86_64.
+2. Build the unified `orpheus` binary for 5 targets; build Tauri bundles
+   for macOS (universal), Linux x86_64, Windows x86_64.
 3. GPG-sign every artifact and produce a detached-signed `SHA256SUMS`.
 4. Attach artifacts to the draft and flip it to published + latest.
-5. Publish `orpheus-core`, `orpheus-cli`, `orpheus-server` to crates.io.
+5. Publish `orpheus-core` and `orpheus-cli` to crates.io.
 6. Update the Homebrew cask in `dougnukem/homebrew-orpheus`.
 
 Failure anywhere in steps 1–4 leaves the draft untouched — re-run the
@@ -107,10 +107,10 @@ gpg --keyserver keys.openpgp.org --send-keys <MASTER_KEY_ID>
 The tagged `release.yml` calls `publish-crates.yml`. Bootstrap once:
 
 ```bash
-# 1. Generate a token scoped to publishing the three crates (NOT account-wide).
+# 1. Generate a token scoped to publishing the two crates (NOT account-wide).
 #    Visit https://crates.io/settings/tokens -> "New token".
 #    Scopes: publish-new, publish-update
-#    Crate filter: orpheus-core, orpheus-cli, orpheus-server
+#    Crate filter: orpheus-core, orpheus-cli
 
 gh secret set CARGO_REGISTRY_TOKEN --body "cio_..."
 
@@ -121,7 +121,6 @@ Publishing order (handled automatically by the workflow):
 
 1. `orpheus-core`
 2. `orpheus-cli`   (depends on core; `--no-verify` to skip redundant rebuild)
-3. `orpheus-server` (same)
 
 `orpheus-tauri` and `orpheus-demo-fixtures` are marked `publish = false`
 and skipped.
