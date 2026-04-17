@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.5",
+  "checkpoint_id": "9c600a63ffc6",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/superpowers/backlog/desktop-app-packaging.md",
+    "src/orpheus/web/app.py",
+    "src/orpheus/web/templates/index.html"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9c/600a63ffc6/0/metadata.json",
+      "transcript": "/9c/600a63ffc6/0/full.jsonl",
+      "context": "/9c/600a63ffc6/0/context.md",
+      "content_hash": "/9c/600a63ffc6/0/content_hash.txt",
+      "prompt": "/9c/600a63ffc6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 15599,
+    "cache_read_tokens": 419595,
+    "output_tokens": 8670,
+    "api_call_count": 9
+  }
+}
