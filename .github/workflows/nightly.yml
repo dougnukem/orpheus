@@ -1,0 +1,269 @@
+# Nightly — scheduled build of `main` producing a dated, signed
+# pre-release.
+#
+# Complements `latest.yml`:
+#   - `latest` (rolling): rebuilt on every push to main; useful for
+#     always-fresh bleeding-edge binaries. Tag is force-replaced.
+#   - `nightly-YYYY-MM-DD` (dated): rebuilt once per day at a fixed time;
+#     useful when you want a stable reference point to pin to, reproduce
+#     bugs against, or bisect regressions over several days.
+#
+# Retention: only the 7 most recent nightly-* releases are kept so the
+# Releases page stays readable.
+
+name: nightly
+
+on:
+  schedule:
+    # 07:00 UTC = midnight PT, 2am CT, 3am ET. Pick a time when main is
+    # least likely to be mid-push.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: prepare nightly metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      should_run: ${{ steps.meta.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: compute tag + skip-if-no-changes
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="nightly-$(date -u +%Y-%m-%d)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # On the scheduled run, skip if main hasn't moved in the last 24h
+          # (otherwise we rebuild identical bits every day). Manual dispatch
+          # always runs.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LAST_COMMIT_EPOCH=$(git log -1 --format=%ct origin/main)
+          NOW=$(date -u +%s)
+          if (( NOW - LAST_COMMIT_EPOCH > 86400 )); then
+            echo "no commits in last 24h; skipping nightly"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-cli:
+    name: cli / ${{ matrix.target }}
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,  os: ubuntu-latest,    label: linux-x86_64,  archive: tar.gz }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, label: linux-aarch64, archive: tar.gz }
+          - { target: x86_64-apple-darwin,       os: macos-13,         label: macos-x86_64,  archive: tar.gz }
+          - { target: aarch64-apple-darwin,      os: macos-latest,     label: macos-aarch64, archive: tar.gz }
+          - { target: x86_64-pc-windows-msvc,    os: windows-latest,   label: windows-x86_64, archive: zip }
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      TARGET: ${{ matrix.target }}
+      LABEL: ${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - shell: bash
+        run: rustup target add "$TARGET"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: nightly-cli-${{ matrix.target }}
+
+      - shell: bash
+        run: cargo build --release --locked --target "$TARGET" -p orpheus-cli -p orpheus-server
+
+      - name: stage artifact (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          NAME="orpheus-$TAG-$LABEL"
+          mkdir -p "staging/$NAME"
+          cp "target/$TARGET/release/orpheus" "staging/$NAME/"
+          cp "target/$TARGET/release/orpheus-server" "staging/$NAME/"
+          cp README.md LICENSE "staging/$NAME/"
+          ( cd staging && tar -czf "$NAME.tar.gz" "$NAME" )
+          echo "ARTIFACT=$NAME" >> "$GITHUB_ENV"
+
+      - name: stage artifact (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $NAME = "orpheus-$env:TAG-$env:LABEL"
+          New-Item -ItemType Directory -Force -Path "staging/$NAME"
+          Copy-Item "target/$env:TARGET/release/orpheus.exe" "staging/$NAME/"
+          Copy-Item "target/$env:TARGET/release/orpheus-server.exe" "staging/$NAME/"
+          Copy-Item README.md, LICENSE "staging/$NAME/"
+          Compress-Archive -Path "staging/$NAME/*" -DestinationPath "staging/$NAME.zip"
+          "ARTIFACT=$NAME" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: staging/${{ env.ARTIFACT }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  build-tauri:
+    name: tauri / ${{ matrix.name }}
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-universal, os: macos-latest,   args: "--target universal-apple-darwin", rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin" }
+          - { name: linux-x86_64,    os: ubuntu-22.04,   args: "",                                rust-targets: "" }
+          - { name: windows-x86_64,  os: windows-latest, args: "",                                rust-targets: "" }
+    env:
+      RUST_TARGETS: ${{ matrix.rust-targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+          install: true
+          cache: true
+      - name: add rust targets
+        if: matrix.rust-targets != ''
+        shell: bash
+        run: |
+          IFS=',' read -r -a targets <<< "$RUST_TARGETS"
+          for t in "${targets[@]}"; do rustup target add "$t"; done
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/orpheus-tauri/src-tauri -> target"
+          shared-key: nightly-tauri-${{ matrix.name }}
+
+      - uses: ./.github/actions/install-linux-deps
+
+      - run: mise run web:install
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: crates/orpheus-tauri/src-tauri
+          args: ${{ matrix.args }}
+
+      - name: collect tauri bundles
+        shell: bash
+        run: |
+          mkdir -p tauri-output
+          find crates/orpheus-tauri/src-tauri/target -type f \
+            \( -name "*.dmg" -o -name "*.app.tar.gz" \
+               -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.msi" -o -name "*.exe" \) \
+            -not -path "*/deps/*" -not -path "*/build/*" \
+            -exec cp {} tauri-output/ \;
+          ls -la tauri-output/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.name }}
+          path: tauri-output/*
+          if-no-files-found: error
+
+  publish:
+    name: publish nightly pre-release
+    needs: [prepare, build-cli, build-tauri]
+    if: needs.prepare.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      SHA: ${{ github.sha }}
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: list artifacts
+        run: ls -la dist/
+
+      - name: sign artifacts with gpg
+        uses: ./.github/actions/sign-artifacts
+        with:
+          artifacts-dir: dist
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+
+      - name: delete prior nightly release with same date (re-run safety)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: gh release delete "$TAG" --yes --cleanup-tag || true
+
+      - name: create nightly pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "Nightly ${{ env.TAG }}"
+          prerelease: true
+          make_latest: "false"
+          body: |
+            **Scheduled nightly build from `main`.** Dated and immutable —
+            a new nightly is cut once per day. For a stable version, use a
+            tagged release.
+
+            - date:   `${{ env.TAG }}`
+            - commit: `${{ github.sha }}`
+            - run:    `${{ github.run_id }}`
+
+            All artifacts are GPG-signed. Verify with:
+            ```
+            gpg --verify SHA256SUMS.asc SHA256SUMS
+            sha256sum -c SHA256SUMS
+            ```
+          files: dist/*
+          fail_on_unmatched_files: true
+
+      - name: prune old nightly releases (keep last 7)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # List nightly-* releases sorted newest-first, skip the 7 most recent,
+          # delete the rest.
+          gh release list --limit 200 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | reverse | .[7:] | .[].tagName' \
+            | while read -r OLD; do
+                [ -z "$OLD" ] && continue
+                echo "deleting old nightly: $OLD"
+                gh release delete "$OLD" --yes --cleanup-tag || true
+              done

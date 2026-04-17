@@ -105,6 +105,7 @@ pub(crate) fn make_key(
         derivation_path: None,
         balance_sat: None,
         total_received_sat: None,
+        total_sent_sat: None,
         tx_count: None,
         notes: None,
     })
