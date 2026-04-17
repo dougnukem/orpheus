@@ -1,0 +1,48 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+.next/
+build/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+apps/web/dist/
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.entire/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local state
+*.env
+.env.*
+secrets/
+wallets/
+passwords*.txt
+!fixtures/**/passwords*.txt
+
+# Real wallet artifacts — only fixtures/ are allowed in git
+*.wallet
+*.dat
+*.aes.json
+!fixtures/**/*.wallet
+!fixtures/**/*.dat
+!fixtures/**/*.aes.json
+
+# Working docs
+ASSUMPTIONS.md
+TODO.md
+CHANGELOG.md
+.claude/plans/_wip/

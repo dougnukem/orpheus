@@ -1,0 +1,23 @@
+[package]
+name = "orpheus-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Orpheus command-line interface"
+
+[[bin]]
+name = "orpheus"
+path = "src/main.rs"
+
+[dependencies]
+orpheus-core = { path = "../orpheus-core" }
+anyhow.workspace = true
+clap.workspace = true
+comfy-table.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
