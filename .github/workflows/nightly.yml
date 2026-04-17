@@ -177,12 +177,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tauri-output
-          # Cargo workspace: bundles land in ./target/release/bundle/...,
-          # NOT in crates/orpheus-tauri/src-tauri/target. Tauri emits
-          # duplicates (Orpheus_0.1.0_amd64.deb AND lowercase
-          # orpheus_0.1.0_amd64.deb from the Cargo crate name); keep only
-          # the productName-cased ones.
-          find target/release/bundle -type f \
+          # Cargo workspace: bundles land under the workspace root `target/`.
+          # Layout varies by target triple:
+          #   native   -> target/release/bundle/<kind>/...
+          #   crossed  -> target/<triple>/release/bundle/<kind>/...
+          #               (e.g. target/universal-apple-darwin/release/bundle/...)
+          # So search the whole target/ tree and filter by the
+          # .../release/bundle/ path segment. Tauri v2 emits duplicates
+          # (Orpheus_0.1.0_amd64.deb AND lowercase
+          # orpheus_0.1.0_amd64.deb from the Cargo crate name); the
+          # Orpheus_/Orpheus- name filter keeps only the productName-cased
+          # ones.
+          find target -type f -path "*/release/bundle/*" \
             \( -name "Orpheus_*.dmg"    -o -name "Orpheus*.app.tar.gz" \
                -o -name "Orpheus_*.AppImage" \
                -o -name "Orpheus_*.deb" -o -name "Orpheus-*.rpm" \
@@ -190,8 +196,8 @@ jobs:
             -exec cp {} tauri-output/ \;
           ls -la tauri-output/
           if [ -z "$(ls -A tauri-output/)" ]; then
-            echo "::error::no Tauri bundles found under target/release/bundle"
-            ls -R target/release/bundle 2>&1 || true
+            echo "::error::no Tauri bundles found under target/**/release/bundle"
+            find target -type d -name bundle 2>&1 | head -20 || true
             exit 1
           fi
 
