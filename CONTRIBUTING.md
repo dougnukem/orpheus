@@ -91,13 +91,19 @@ The [`release` workflow](.github/workflows/release.yml) takes it from there.
 
 ## Pull request workflow
 
-1. Branch from `main`.
+**All work lands via feature branches and pull requests — no direct commits
+to `main`.** `main` is protected by the CI pipeline and the release pipeline
+assumes it is always green; direct commits bypass both.
+
+1. Branch from `main`: `git switch -c <type>/<short-name>` (e.g.
+   `feat/bip84-accounts`, `fix/multibit-salt-scan`).
 2. Keep commits small and conventional.
-3. Open a draft PR early so CI runs on your changes.
-4. Once green, flip to ready-for-review.
-5. Squash-merge preserves the conventional-commit title; review-then-merge
-   preserves the full history. Either is fine; the PR title itself should be
-   conventional in case of a squash.
+3. Push early and open a **draft PR** so CI runs on your changes.
+4. Once `mise run ci` is green locally and CI passes, flip to
+   ready-for-review.
+5. A reviewer plus green CI are required before merging.
+6. Squash-merge preserves the conventional-commit title as the merge commit
+   — keep the PR title conventional so release-note generation stays tidy.
 
 ## Security-sensitive changes
 
