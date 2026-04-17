@@ -1,3 +1,10 @@
+# Canonical rust toolchain pin for the workspace.
+#
+# rustup auto-installs the listed components on first cargo invocation, which
+# means `cargo fmt`, `cargo clippy`, and mise's `rust:lint` task all work on
+# a fresh machine (local or CI) without extra bootstrap steps. mise still
+# pins the same channel in mise.toml; this file is what rustup reads.
 [toolchain]
-channel = "stable"
+channel = "1.95"
 components = ["rustfmt", "clippy"]
+profile = "minimal"
