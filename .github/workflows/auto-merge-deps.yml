@@ -1,0 +1,199 @@
+# Auto-merge Dependabot PRs according to supply-chain policy:
+#
+#   Security/CVE         → enable auto-merge immediately
+#   Crypto primitives    → block auto-merge, post manual-review comment
+#   Major semver bump    → block auto-merge (comment)
+#   Patch / minor, aged  → enable auto-merge once CI passes AND the
+#                          new version is ≥ MIN_DAYS_OLD days on the
+#                          registry (crates.io or npm)
+#
+# "Aged" gate rationale: major supply-chain attacks surface within hours
+# to days; 7 days gives meaningful lag without accumulating stale deps.
+#
+# Prerequisites:
+#   • Branch protection on main with "all green" as a required check.
+#   • Auto-merge enabled in repo Settings → General.
+#   Both are needed for `gh pr merge --auto` to actually wait for CI.
+
+name: auto-merge deps
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  MIN_DAYS_OLD: "7"
+
+jobs:
+  auto-merge:
+    name: classify + merge
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: fetch metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Classify the update ───────────────────────────────────────────────
+      - name: classify
+        id: classify
+        env:
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          ALERT_STATE: ${{ steps.meta.outputs.alert-state }}
+        run: |
+          is_security="false"
+          is_crypto="false"
+          is_major="false"
+
+          [[ -n "$ALERT_STATE" ]] && is_security="true"
+
+          # RustCrypto primitives used in key derivation / encryption.
+          # These require human eyes regardless of semver bump size.
+          CRYPTO_RE='(^|,\s*)(aes|sha2|sha1|sha3|hmac|pbkdf2|scrypt|ripemd|digest|block-buffer|cipher|chacha20|poly1305|aead|ghash|salsa20|universal-hash)(\s*,|$)'
+          echo "$DEPS" | grep -qiP "$CRYPTO_RE" && is_crypto="true"
+
+          [[ "$UPDATE_TYPE" == "version-update:semver-major" ]] && is_major="true"
+
+          echo "is-security=$is_security" >> "$GITHUB_OUTPUT"
+          echo "is-crypto=$is_crypto"     >> "$GITHUB_OUTPUT"
+          echo "is-major=$is_major"       >> "$GITHUB_OUTPUT"
+
+      # ── Registry age check (skipped for security / crypto / major) ────────
+      - name: age-check
+        id: age
+        if: |
+          steps.classify.outputs.is-security == 'false' &&
+          steps.classify.outputs.is-crypto   == 'false' &&
+          steps.classify.outputs.is-major    == 'false'
+        env:
+          DEPS_JSON: ${{ steps.meta.outputs.updated-dependencies-json }}
+        run: |
+          set -euo pipefail
+
+          ECOSYSTEM=$(echo "$DEPS_JSON" | jq -r '.[0].packageEcosystem')
+
+          # Actions deps are already SHA-pinned — the SHA is the guarantee.
+          if [[ "$ECOSYSTEM" == "github-actions" ]]; then
+            echo "old-enough=true"         >> "$GITHUB_OUTPUT"
+            echo "min-age-days=sha-pinned" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MIN_EPOCH=$(( $(date +%s) - ${MIN_DAYS_OLD} * 86400 ))
+          OLDEST_DAYS=99999
+          OLD_ENOUGH=true
+
+          while IFS= read -r row; do
+            DEP=$(echo "$row" | jq -r '.dependencyName')
+            VER=$(echo "$row" | jq -r '.newVersion')
+
+            if [[ "$ECOSYSTEM" == "cargo" ]]; then
+              PUB=$(curl -sf \
+                -H "User-Agent: orpheus/dep-age-check (github.com/dougnukem/orpheus)" \
+                "https://crates.io/api/v1/crates/${DEP}/${VER}" \
+                | jq -r '.version.created_at // empty' || true)
+            elif [[ "$ECOSYSTEM" == "npm" ]]; then
+              PUB=$(curl -sf \
+                "https://registry.npmjs.org/${DEP}" \
+                | jq -r --arg v "$VER" '.time[$v] // empty' || true)
+            else
+              echo "::notice::Unknown ecosystem $ECOSYSTEM for $DEP — skipping age check"
+              continue
+            fi
+
+            if [[ -z "$PUB" ]]; then
+              echo "::warning::Cannot determine publish date for $DEP@$VER — allowing (will not block)"
+              continue
+            fi
+
+            PUB_EPOCH=$(date -d "$PUB" +%s)
+            AGE_DAYS=$(( ( $(date +%s) - PUB_EPOCH ) / 86400 ))
+            echo "::notice::$DEP@$VER is $AGE_DAYS day(s) old"
+
+            (( AGE_DAYS < OLDEST_DAYS )) && OLDEST_DAYS=$AGE_DAYS
+            (( PUB_EPOCH > MIN_EPOCH )) && OLD_ENOUGH=false
+          done < <(echo "$DEPS_JSON" | jq -c '.[]')
+
+          [[ "$OLDEST_DAYS" -eq 99999 ]] && OLDEST_DAYS=0
+
+          echo "old-enough=$OLD_ENOUGH"    >> "$GITHUB_OUTPUT"
+          echo "min-age-days=$OLDEST_DAYS" >> "$GITHUB_OUTPUT"
+
+      # ── Security: merge ASAP ──────────────────────────────────────────────
+      - name: auto-merge (security)
+        if: steps.classify.outputs.is-security == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      # ── Patch/minor, non-crypto, aged ─────────────────────────────────────
+      - name: auto-merge (patch/minor, aged)
+        if: |
+          steps.classify.outputs.is-security == 'false' &&
+          steps.classify.outputs.is-crypto   == 'false' &&
+          steps.classify.outputs.is-major    == 'false' &&
+          steps.age.outputs.old-enough       == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      # ── Too fresh: leave a comment explaining the hold ────────────────────
+      - name: comment (too young)
+        if: |
+          steps.classify.outputs.is-security == 'false' &&
+          steps.classify.outputs.is-crypto   == 'false' &&
+          steps.classify.outputs.is-major    == 'false' &&
+          steps.age.outputs.old-enough       == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+          NEW_VER: ${{ steps.meta.outputs.new-version }}
+          AGE: ${{ steps.age.outputs.min-age-days }}
+        run: |
+          gh pr comment "$PR_URL" --body \
+            "⏳ **Supply-chain age gate — auto-merge paused.**
+
+\`${DEPS}\` @ \`${NEW_VER}\` was published **${AGE} day(s) ago** (minimum: ${MIN_DAYS_OLD} days).
+
+Auto-merge will be enabled once the release ages past the threshold. Dependabot will re-trigger this check on the next weekly run, or you can merge manually if the change looks safe."
+
+      # ── Crypto primitives: require human eyes ─────────────────────────────
+      - name: comment (crypto — manual review)
+        if: |
+          steps.classify.outputs.is-crypto   == 'true' &&
+          steps.classify.outputs.is-security == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+        run: |
+          gh pr comment "$PR_URL" --body \
+            "🔐 **Crypto primitive — manual review required.**
+
+\`${DEPS}\` is a cryptographic primitive used in wallet key derivation or encryption. These are intentionally excluded from auto-merge. Please review the upstream changelog and diff before merging."
+
+      # ── Major semver: require human eyes ─────────────────────────────────
+      - name: comment (major — manual review)
+        if: |
+          steps.classify.outputs.is-major    == 'true' &&
+          steps.classify.outputs.is-security == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+          NEW_VER: ${{ steps.meta.outputs.new-version }}
+        run: |
+          gh pr comment "$PR_URL" --body \
+            "🔺 **Major version bump — manual review required.**
+
+\`${DEPS}\` → \`${NEW_VER}\` is a major semver bump and is excluded from auto-merge. Review the migration guide / changelog before merging."
