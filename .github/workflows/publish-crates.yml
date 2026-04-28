@@ -61,13 +61,13 @@ jobs:
           fi
 
       - if: steps.gate.outputs.skip == 'false'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
 
       - if: steps.gate.outputs.skip == 'false'
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
