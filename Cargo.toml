@@ -25,7 +25,7 @@ secp256k1 = { version = "0.29", features = ["global-context", "rand-std"] }
 scrypt = { version = "0.11" }
 aes = "0.9"
 cbc = { version = "0.1", features = ["std"] }
-sha2 = "0.10"
+sha2 = "0.11"
 ripemd = "0.1"
 hmac = "0.13"
 pbkdf2 = "0.12"
