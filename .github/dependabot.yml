@@ -33,6 +33,26 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     groups:
+      # Crypto primitives intentionally kept as a separate group so the
+      # auto-merge workflow can require manual review for these crates.
+      rust-crypto:
+        patterns:
+          - "aes*"
+          - "sha2"
+          - "sha1*"
+          - "sha3*"
+          - "hmac"
+          - "pbkdf2"
+          - "scrypt"
+          - "ripemd*"
+          - "digest*"
+          - "block-buffer*"
+          - "cipher*"
+          - "chacha20*"
+          - "poly1305*"
+          - "aead*"
+          - "ghash*"
+          - "universal-hash*"
       rust-bitcoin-ecosystem:
         patterns: ["bitcoin*", "bip39", "secp256k1", "base58*"]
       tokio-ecosystem:
@@ -56,11 +76,25 @@ updates:
     open-pull-requests-limit: 10
     groups:
       react:
-        patterns: ["react", "react-dom", "@types/react*"]
+        patterns: ["react", "react-dom", "react-router*", "@types/react*"]
       tailwind:
         patterns: ["tailwindcss", "@tailwindcss/*"]
       tauri:
         patterns: ["@tauri-apps/*"]
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "typescript-eslint*"
+          - "@typescript-eslint/*"
+          - "eslint-plugin-*"
+          - "eslint-config-*"
+      vite:
+        patterns: ["vite", "vitest*", "@vitejs/*"]
+      testing:
+        patterns: ["jsdom", "@testing-library/*", "@types/jsdom*"]
+      ui-libs:
+        patterns: ["lucide-react", "qrcode-generator", "clsx", "class-variance-authority"]
     labels:
       - "frontend"
       - "dependencies"
