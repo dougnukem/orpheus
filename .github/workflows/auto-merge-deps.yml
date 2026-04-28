@@ -160,12 +160,10 @@ jobs:
           NEW_VER: ${{ steps.meta.outputs.new-version }}
           AGE: ${{ steps.age.outputs.min-age-days }}
         run: |
-          gh pr comment "$PR_URL" --body \
-            "⏳ **Supply-chain age gate — auto-merge paused.**
-
-\`${DEPS}\` @ \`${NEW_VER}\` was published **${AGE} day(s) ago** (minimum: ${MIN_DAYS_OLD} days).
-
-Auto-merge will be enabled once the release ages past the threshold. Dependabot will re-trigger this check on the next weekly run, or you can merge manually if the change looks safe."
+          BODY='⏳ **Supply-chain age gate — auto-merge paused.**'
+          BODY="$BODY"$'\n\n'"\`${DEPS}\` @ \`${NEW_VER}\` was published **${AGE} day(s) ago** (minimum: ${MIN_DAYS_OLD} days)."
+          BODY="$BODY"$'\n\n'"Auto-merge will be enabled once the release ages past the threshold. Dependabot will re-trigger this check on the next weekly run, or you can merge manually if the change looks safe."
+          gh pr comment "$PR_URL" --body "$BODY"
 
       # ── Crypto primitives: require human eyes ─────────────────────────────
       - name: comment (crypto — manual review)
@@ -177,10 +175,9 @@ Auto-merge will be enabled once the release ages past the threshold. Dependabot 
           PR_URL: ${{ github.event.pull_request.html_url }}
           DEPS: ${{ steps.meta.outputs.dependency-names }}
         run: |
-          gh pr comment "$PR_URL" --body \
-            "🔐 **Crypto primitive — manual review required.**
-
-\`${DEPS}\` is a cryptographic primitive used in wallet key derivation or encryption. These are intentionally excluded from auto-merge. Please review the upstream changelog and diff before merging."
+          BODY='🔐 **Crypto primitive — manual review required.**'
+          BODY="$BODY"$'\n\n'"\`${DEPS}\` is a cryptographic primitive used in wallet key derivation or encryption. These are intentionally excluded from auto-merge. Please review the upstream changelog and diff before merging."
+          gh pr comment "$PR_URL" --body "$BODY"
 
       # ── Major semver: require human eyes ─────────────────────────────────
       - name: comment (major — manual review)
@@ -193,7 +190,6 @@ Auto-merge will be enabled once the release ages past the threshold. Dependabot 
           DEPS: ${{ steps.meta.outputs.dependency-names }}
           NEW_VER: ${{ steps.meta.outputs.new-version }}
         run: |
-          gh pr comment "$PR_URL" --body \
-            "🔺 **Major version bump — manual review required.**
-
-\`${DEPS}\` → \`${NEW_VER}\` is a major semver bump and is excluded from auto-merge. Review the migration guide / changelog before merging."
+          BODY='🔺 **Major version bump — manual review required.**'
+          BODY="$BODY"$'\n\n'"\`${DEPS}\` → \`${NEW_VER}\` is a major semver bump and is excluded from auto-merge. Review the migration guide / changelog before merging."
+          gh pr comment "$PR_URL" --body "$BODY"
