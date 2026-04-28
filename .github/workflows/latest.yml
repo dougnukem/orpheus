@@ -1,6 +1,6 @@
-# Latest — pre-release built on every version tag push.
+# Latest — continuous pre-release tracking `main`.
 #
-# On every push of a v* tag (and manual dispatch):
+# On every push to main:
 #   1. Build CLI + server binaries across native-runner matrix.
 #   2. Build Tauri desktop bundles via tauri-action.
 #   3. Atomically publish/replace the `latest` PRE-release on GitHub with
@@ -15,7 +15,7 @@ name: latest
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
