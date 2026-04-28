@@ -38,7 +38,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       should_run: ${{ steps.meta.outputs.should_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 2
       - name: compute tag + skip-if-no-changes
@@ -86,8 +86,8 @@ jobs:
       TARGET: ${{ matrix.target }}
       LABEL: ${{ matrix.label }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
@@ -123,7 +123,7 @@ jobs:
           Compress-Archive -Path "staging/$NAME/*" -DestinationPath "staging/$NAME.zip"
           "ARTIFACT=$NAME" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT }}
           path: staging/${{ env.ARTIFACT }}.${{ matrix.archive }}
@@ -144,8 +144,8 @@ jobs:
     env:
       RUST_TARGETS: ${{ matrix.rust-targets }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
           install: true
@@ -213,7 +213,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tauri-${{ matrix.name }}
           path: tauri-output/*
@@ -231,11 +231,11 @@ jobs:
       SHA: ${{ github.sha }}
       RUN_ID: ${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -258,7 +258,7 @@ jobs:
         run: gh release delete "$TAG" --yes --cleanup-tag || true
 
       - name: create nightly pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.TAG }}
           name: "Nightly ${{ env.TAG }}"
