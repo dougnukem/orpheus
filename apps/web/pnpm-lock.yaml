@@ -21,8 +21,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       lucide-react:
-        specifier: ^1.8.0
-        version: 1.8.0(react@19.2.5)
+        specifier: ^1.11.0
+        version: 1.11.0(react@19.2.5)
       qrcode-generator:
         specifier: ^2.0.4
         version: 2.0.4
@@ -44,7 +44,7 @@ importers:
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
-        version: 10.0.1(eslint@10.2.0(jiti@2.6.1))
+        version: 10.0.1(eslint@10.2.1(jiti@2.6.1))
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
@@ -1432,8 +1432,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-react@1.8.0:
-    resolution: {integrity: sha512-WuvlsjngSk7TnTBJ1hsCy3ql9V9VOdcPkd3PKcSmM34vJD8KG6molxz7m7zbYFgICwsanQWmJ13JlYs4Zp7Arw==}
+  lucide-react@1.11.0:
+    resolution: {integrity: sha512-UOhjdztXCgdBReRcIhsvz2siIBogfv/lhJEIViCpLt924dO+GDms9T7DNoucI23s6kEPpe988m5N0D2ajnzb2g==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -2148,9 +2148,9 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
 
-  '@eslint/js@10.0.1(eslint@10.2.0(jiti@2.6.1))':
+  '@eslint/js@10.0.1(eslint@10.2.1(jiti@2.6.1))':
     optionalDependencies:
-      eslint: 10.2.0(jiti@2.6.1)
+      eslint: 10.2.1(jiti@2.6.1)
 
   '@eslint/object-schema@3.0.5': {}
 
@@ -3115,7 +3115,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react@1.8.0(react@19.2.5):
+  lucide-react@1.11.0(react@19.2.5):
     dependencies:
       react: 19.2.5
 
