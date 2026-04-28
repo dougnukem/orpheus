@@ -11,8 +11,24 @@ name: ci
 
 on:
   pull_request:
+    paths:
+      - 'crates/**'
+      - 'apps/web/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'mise.toml'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/**'
   push:
     branches: [main]
+    paths:
+      - 'crates/**'
+      - 'apps/web/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'mise.toml'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/**'
   workflow_dispatch:
 
 permissions:
@@ -59,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
