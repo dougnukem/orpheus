@@ -14,10 +14,6 @@
 name: nightly
 
 on:
-  schedule:
-    # 07:00 UTC = midnight PT, 2am CT, 3am ET. Pick a time when main is
-    # least likely to be mid-push.
-    - cron: "0 7 * * *"
   workflow_dispatch:
 
 permissions:
