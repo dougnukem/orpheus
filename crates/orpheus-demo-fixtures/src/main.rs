@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+use aes::cipher::{BlockModeEncrypt, KeyIvInit, block_padding::Pkcs7};
 use anyhow::Result;
 use bip39::{Language, Mnemonic};
 use orpheus_core::crypto::{
@@ -161,7 +161,7 @@ fn build_multibit_encrypted(privs: &[[u8; 32]], password: &str) -> Vec<u8> {
         let iv = [(0x22u8 ^ i as u8); 16];
         type Cbc = cbc::Encryptor<aes::Aes256>;
         let ct: Vec<u8> =
-            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec_mut::<Pkcs7>(p);
+            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec::<Pkcs7>(p);
         blob.extend_from_slice(IV_TAG);
         blob.extend_from_slice(&iv);
         blob.extend_from_slice(DATA_TAG);
