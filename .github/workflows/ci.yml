@@ -17,7 +17,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'mise.toml'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
       - '.github/actions/**'
   push:
     branches: [main]
@@ -27,7 +27,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'mise.toml'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
       - '.github/actions/**'
   workflow_dispatch:
 
