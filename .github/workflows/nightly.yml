@@ -38,7 +38,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       should_run: ${{ steps.meta.outputs.should_run }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
       - name: compute tag + skip-if-no-changes
@@ -86,7 +86,7 @@ jobs:
       TARGET: ${{ matrix.target }}
       LABEL: ${{ matrix.label }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
         with:
           experimental: true
@@ -144,7 +144,7 @@ jobs:
     env:
       RUST_TARGETS: ${{ matrix.rust-targets }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
         with:
           experimental: true
@@ -231,7 +231,7 @@ jobs:
       SHA: ${{ github.sha }}
       RUN_ID: ${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
