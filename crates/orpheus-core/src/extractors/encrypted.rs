@@ -94,7 +94,9 @@ impl Extractor for EncryptedWalletExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+    // cipher 0.5 (via aes 0.9) renamed the block-mode traits and dropped the
+    // `_mut` suffix from the padded helpers. Mirrors `crypto::aes_cbc_decrypt`.
+    use aes::cipher::{BlockModeEncrypt, KeyIvInit, block_padding::Pkcs7};
     use std::io::Write;
 
     fn tempfile_path(name: &str) -> std::path::PathBuf {
@@ -120,7 +122,7 @@ mod tests {
         let iv = [0x22u8; 16];
         type Cbc = cbc::Encryptor<aes::Aes256>;
         let ct: Vec<u8> =
-            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec_mut::<Pkcs7>(&priv_bytes);
+            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec::<Pkcs7>(&priv_bytes);
 
         let path = tempfile_path("protected.wallet");
         let mut f = std::fs::File::create(&path).unwrap();

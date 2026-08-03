@@ -9,10 +9,15 @@
 
 pub mod balance;
 pub mod crypto;
+pub mod discovery;
 pub mod extractors;
+pub mod hunt;
+pub mod ledger;
 pub mod models;
 pub mod scanner;
 
+pub use discovery::{Candidate, DetectedFormat, DiscoverOptions, Tier};
+pub use ledger::{Attempt, AttemptOutcome, Ledger};
 pub use models::{
-    BalanceInfo, ExtractedKey, ScanSummary, SourceType, SourceTypeStats, WalletScanResult,
+    BalanceInfo, ExtractedKey, ScanSummary, SourceType, SourceTypeStats, TxRecord, WalletScanResult,
 };
