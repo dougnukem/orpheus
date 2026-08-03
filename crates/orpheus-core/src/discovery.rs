@@ -43,6 +43,18 @@ const BIP39_WORD_COUNTS: &[usize] = &[12, 15, 18, 21, 24];
 /// that regenerate, or vendored trees that cannot contain a personal wallet.
 ///
 /// `.Trash` is deliberately absent — a deleted wallet is still a wallet.
+///
+/// `CloudStorage` is pruned for a different reason: on macOS,
+/// `~/Library/CloudStorage/` is the File Provider root for Google Drive,
+/// OneDrive, and the modern Dropbox client, and its contents are usually
+/// *online-only placeholders*. Merely reading a file's head to sniff its magic
+/// bytes forces the provider to download the whole file. Sweeping it would
+/// silently hydrate — and read — a user's entire cloud drive over the network,
+/// which is both catastrophically slow and a privacy problem. "This computer"
+/// means the bytes actually on local disk. To scan a specific cloud folder
+/// anyway, point `--root` straight at it and accept the download cost. The
+/// classic local `~/Dropbox` folder is unaffected — it is not under
+/// `CloudStorage` and its files are real on disk.
 pub const PRUNE_DIRS: &[&str] = &[
     "node_modules",
     ".git",
@@ -71,6 +83,7 @@ pub const PRUNE_DIRS: &[&str] = &[
     "iOS DeviceSupport",
     ".rustup",
     ".vscode-server",
+    "CloudStorage",
 ];
 
 /// Extensions worth reading as text when hunting for key material.
@@ -1054,6 +1067,41 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].format, DetectedFormat::BitcoinCoreBdb);
         assert_eq!(found[0].tier, Tier::A);
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Reading heads under `~/Library/CloudStorage/` hydrates online-only cloud
+    /// files over the network. The whole subtree must be pruned so a sweep
+    /// never downloads a user's Google Drive, while a real local wallet
+    /// elsewhere is still found.
+    #[test]
+    fn prunes_cloud_storage_but_not_local_files() {
+        let root = tmpdir("cloud");
+        let drive = root
+            .join("Library")
+            .join("CloudStorage")
+            .join("GoogleDrive-someone@example.com")
+            .join("My Drive");
+        std::fs::create_dir_all(&drive).unwrap();
+        std::fs::write(drive.join("wallet.dat"), bdb_head(false)).unwrap();
+
+        let opts = DiscoverOptions {
+            roots: vec![root.clone()],
+            ..Default::default()
+        };
+        assert!(
+            discover(&opts).is_empty(),
+            "CloudStorage must be pruned so cloud files are never hydrated"
+        );
+
+        // The classic local Dropbox-style folder is not under CloudStorage.
+        let local = root.join("Dropbox").join("bitcoin");
+        std::fs::create_dir_all(&local).unwrap();
+        std::fs::write(local.join("wallet.dat"), bdb_head(false)).unwrap();
+        let found = discover(&opts);
+        assert_eq!(found.len(), 1, "a local wallet must still be found");
+        assert!(found[0].path.to_string_lossy().contains("Dropbox"));
 
         std::fs::remove_dir_all(&root).ok();
     }

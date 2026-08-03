@@ -70,6 +70,16 @@ Candidates are sorted into tiers:
 
 `.Trash` is deliberately **not** pruned. A deleted wallet is still a wallet.
 
+**Cloud storage is pruned by default.** On macOS `~/Library/CloudStorage/`
+(Google Drive, OneDrive, the modern Dropbox client) holds *online-only
+placeholders*. Reading a file's head to sniff it forces the provider to
+download the whole file, so an unguarded sweep would quietly pull your
+entire cloud drive over the network. "This computer" means bytes on local
+disk. To scan a specific cloud folder anyway, point `--root` straight at
+it and accept the download cost. The **classic local `~/Dropbox` folder is
+not affected** — it isn't under `CloudStorage` and its files are real on
+disk, so it's swept normally.
+
 ### How long it takes
 
 Discovery reads the head of every plausibly-relevant file and fully reads
