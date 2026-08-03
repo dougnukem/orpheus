@@ -295,9 +295,25 @@ const CKEY_MARKER: &[u8] = b"\x04ckey";
 /// are spread through the file, so a head-only peek is not enough, but neither
 /// is reading a 300 MB blockchain-adjacent file.
 const ENCRYPTION_PROBE_BYTES: u64 = 64 * 1024 * 1024;
-const MULTIBIT_TAG: &[u8] = b"org.bitcoin";
-/// MultiBit Classic writes this literal for wallets whose keys are in the clear.
-const MULTIBIT_UNENCRYPTED_TAG: &[u8] = b"org.bitcoin.production";
+
+/// MultiBit Classic wallets are bitcoinj protobufs whose very first field is the
+/// network identifier. Serialized, that is `0x0a` (field 1, wire type 2 =
+/// length-delimited), a length byte, then the ASCII network name. A genuine
+/// wallet therefore *starts with* one of these byte sequences.
+///
+/// Matching merely `org.bitcoin` *somewhere* in the head — which the previous
+/// heuristic did — misfires on anything that mentions the string: this crate's
+/// own `multibit.rs`, a `wallet.proto` schema, even this project's docs. The
+/// header must be at offset 0.
+const MULTIBIT_HEADER_PRODUCTION: &[u8] = b"\x0a\x16org.bitcoin.production";
+const MULTIBIT_HEADER_TEST: &[u8] = b"\x0a\x10org.bitcoin.test";
+
+/// bitcoinj's `Wallet.encryption_type` (field 5, a varint enum): tag `0x28`
+/// then `1` = UNENCRYPTED or `2` = ENCRYPTED_SCRYPT_AES. This — not any ASCII
+/// string — is how a real wallet declares encryption; a v3 encrypted wallet
+/// contains no plaintext `scrypt`, so the old string check could never have
+/// matched one.
+const MULTIBIT_ENCRYPTED_MARKER: &[u8] = b"\x28\x02";
 
 /// Identify a file from its name and the first [`HEAD_BYTES`] of its contents.
 ///
@@ -326,15 +342,8 @@ pub fn detect_format(file_name: &str, head: &[u8]) -> DetectedFormat {
         return DetectedFormat::Unknown;
     }
 
-    if contains(head, MULTIBIT_TAG) {
-        // A v3 MultiBit wallet carries scrypt parameters alongside the keys.
-        if contains(head, b"scrypt") || contains(head, b"encrypted") {
-            return DetectedFormat::MultibitEncrypted;
-        }
-        if contains(head, MULTIBIT_UNENCRYPTED_TAG) {
-            return DetectedFormat::MultibitProtobuf;
-        }
-        return DetectedFormat::MultibitProtobuf;
+    if let Some(fmt) = detect_multibit(head) {
+        return fmt;
     }
 
     // Text-shaped formats.
@@ -381,6 +390,24 @@ pub fn is_encrypted_bitcoin_core(path: &Path, size: u64) -> bool {
         return false;
     };
     contains(&data, MKEY_MARKER) || contains(&data, CKEY_MARKER)
+}
+
+/// Classify a MultiBit Classic (bitcoinj) wallet, or `None` if `head` is not
+/// one. A real wallet begins with the serialized network-identifier field;
+/// encryption is read from the `encryption_type` enum, never from an ASCII
+/// string, so files that merely *mention* MultiBit are not mistaken for it.
+#[must_use]
+fn detect_multibit(head: &[u8]) -> Option<DetectedFormat> {
+    if !(head.starts_with(MULTIBIT_HEADER_PRODUCTION) || head.starts_with(MULTIBIT_HEADER_TEST)) {
+        return None;
+    }
+    if contains(head, MULTIBIT_ENCRYPTED_MARKER) {
+        Some(DetectedFormat::MultibitEncrypted)
+    } else {
+        // UNENCRYPTED, or no explicit marker in the head — the MultiBit
+        // extractor scans for the clear key records either way.
+        Some(DetectedFormat::MultibitProtobuf)
+    }
 }
 
 fn is_archive_name(lower_name: &str) -> bool {
@@ -878,9 +905,13 @@ mod tests {
         );
     }
 
+    // These byte prefixes are taken from real MultiBit Classic wallets: an
+    // unencrypted one carries `encryption_type = 1` (0x28 0x01) and a clear
+    // key record (0x12 0x20 …); an encrypted one carries `encryption_type = 2`
+    // (0x28 0x02).
     #[test]
     fn detects_multibit_protobuf() {
-        let head = b"\x0a\x16org.bitcoin.production\x12\x20".to_vec();
+        let head = b"\x0a\x16org.bitcoin.production\x1a\x4e\x28\x01\x12\x20".to_vec();
         assert_eq!(
             detect_format("ddaniels.wallet", &head),
             DetectedFormat::MultibitProtobuf
@@ -888,11 +919,52 @@ mod tests {
     }
 
     #[test]
-    fn detects_multibit_encrypted() {
-        let head = b"\x0a\x16org.bitcoin.production scrypt salt".to_vec();
+    fn detects_multibit_encrypted_by_encryption_type_enum() {
+        // Real v3 wallets contain NO ASCII "scrypt"; encryption is the 0x28 0x02
+        // enum, which is what we key on.
+        let head = b"\x0a\x16org.bitcoin.production\x12\x20\x00\x00\x28\x02".to_vec();
         let f = detect_format("ddaniels-protected.wallet", &head);
         assert_eq!(f, DetectedFormat::MultibitEncrypted);
         assert!(f.needs_password());
+    }
+
+    /// The false-positive class this fix targets: files that merely *mention*
+    /// `org.bitcoin` (and even `scrypt`/`encrypted`) but are not wallets — this
+    /// crate's own extractor source, a `.proto` schema, this project's docs.
+    /// None begin with the bitcoinj protobuf header, so none are wallets.
+    #[test]
+    fn text_mentioning_multibit_is_not_a_wallet() {
+        let cases: &[(&str, &[u8])] = &[
+            (
+                "multibit.rs",
+                b"// MultiBit Classic .wallet extractor. org.bitcoin.production, scrypt+AES.",
+            ),
+            (
+                "wallet.proto",
+                b"/* bitcoinj wallet schema */ message Wallet { optional string network_identifier = 1; // org.bitcoin.production",
+            ),
+            (
+                "wallet-hunt.md",
+                b"# hunt\n\n`org.bitcoin.production` protobuf and MultiBit v3 scrypt+AES are detected...",
+            ),
+        ];
+        for (name, body) in cases {
+            assert_eq!(
+                detect_format(name, body),
+                DetectedFormat::Unknown,
+                "{name} mentions MultiBit but is not a wallet"
+            );
+        }
+    }
+
+    /// A `.wallet`-named file whose bytes are not a bitcoinj protobuf is also
+    /// not a MultiBit wallet — the name is not enough.
+    #[test]
+    fn wallet_named_file_without_protobuf_header_is_not_multibit() {
+        assert_eq!(
+            detect_format("notes.wallet", b"org.bitcoin stuff I wrote about my wallet"),
+            DetectedFormat::Unknown
+        );
     }
 
     #[test]
