@@ -109,6 +109,10 @@ run = "pnpm dev"
 
 [tasks."web:build"]
 description = "Build React app into apps/web/dist"
+# `ci` runs its dependencies in parallel, so without this the build can start
+# before `web:install` has finished populating node_modules — the other web
+# tasks already declare it.
+depends = ["web:install"]
 dir = "apps/web"
 run = "pnpm build"
 

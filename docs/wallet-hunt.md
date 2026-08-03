@@ -70,6 +70,21 @@ Candidates are sorted into tiers:
 
 `.Trash` is deliberately **not** pruned. A deleted wallet is still a wallet.
 
+### How long it takes
+
+Discovery reads the head of every plausibly-relevant file and fully reads
+every text file under 8 MB to check it for key material. On a developer's
+`$HOME` with a large `~/.cargo`, `~/go/pkg/mod`, and years of documents,
+**a first full sweep takes tens of minutes**. Run it in the background.
+
+The prune list stays deliberately conservative — a wallet in an odd
+directory is exactly what this tool exists to find, so breadth wins over
+speed. Narrow the scope with `--root` when you know roughly where to look:
+
+```bash
+orpheus hunt discover --root ~/Dropbox --root ~/Documents
+```
+
 ## Deduplication
 
 Wallets get copied. `~/Dropbox/bitcoin/wallet.dat` and
