@@ -464,40 +464,57 @@ pub fn text_signals(text: &str) -> Vec<TextSignal> {
     out
 }
 
-/// Locate a valid BIP39 English mnemonic anywhere in `text`.
+/// Tokens a line may carry *around* a mnemonic and still count as a seed
+/// backup: a label like `seed phrase backup 2015:` or a `1.`/`-` bullet.
 ///
-/// Tokenises to lowercase alphabetic runs, then tries the five legal lengths at
-/// each start offset whose first word is in the wordlist. The membership
-/// pre-filter is what keeps this cheap on ordinary prose.
+/// This is the whole defence against prose false positives. The BIP39 English
+/// wordlist is built from common words — `about`, `age`, `air`, `all`,
+/// `among`, `angle`, `animal`, `answer`, `any` — so a long enough line of
+/// English or source code will, by coincidence, contain twelve consecutive
+/// wordlist words that pass the checksum roughly one line in a few thousand.
+/// On a whole machine that is thousands of false hits in numpy, pandas, and R
+/// documentation. A *real* seed phrase, by contrast, is the content of its
+/// line, not a fragment buried in a paragraph. Requiring the mnemonic to be
+/// nearly the entire line rejects the prose without losing genuine backups.
+const BIP39_MAX_EXTRA_TOKENS_PER_LINE: usize = 4;
+
+/// Locate a valid BIP39 English mnemonic that constitutes the bulk of a single
+/// line.
+///
+/// Scans line by line rather than across the whole file. A line qualifies only
+/// when a contiguous window of wordlist words forms a checksum-valid mnemonic
+/// *and* the line carries at most [`BIP39_MAX_EXTRA_TOKENS_PER_LINE`] other
+/// alphabetic tokens — enough slack for a `seed:` label, not enough for a
+/// sentence that merely happens to contain the right words in a row.
 #[must_use]
 pub fn find_bip39_phrase(text: &str) -> Option<String> {
-    let words: Vec<&str> = text
-        .split(|c: char| !c.is_ascii_alphabetic())
-        .filter(|w| !w.is_empty())
-        .collect();
-    if words.len() < 12 {
-        return None;
-    }
     let dict = english_words();
 
-    // Lowercase once per token rather than per window.
-    let lowered: Vec<String> = words.iter().map(|w| w.to_ascii_lowercase()).collect();
-
-    for start in 0..lowered.len() {
-        if !dict.contains(lowered[start].as_str()) {
+    for line in text.lines() {
+        let words: Vec<String> = line
+            .split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|w| !w.is_empty())
+            .map(|w| w.to_ascii_lowercase())
+            .collect();
+        // Fewer than 12 words can't be a mnemonic; far more than the longest
+        // mnemonic plus a small label means it's prose, not a seed line.
+        if words.len() < 12 {
             continue;
         }
+
         for &n in BIP39_WORD_COUNTS {
-            if start + n > lowered.len() {
+            if words.len() < n || words.len() > n + BIP39_MAX_EXTRA_TOKENS_PER_LINE {
                 continue;
             }
-            let window = &lowered[start..start + n];
-            if !window.iter().all(|w| dict.contains(w.as_str())) {
-                continue;
-            }
-            let phrase = window.join(" ");
-            if Mnemonic::parse_in(Language::English, &phrase).is_ok() {
-                return Some(phrase);
+            for start in 0..=(words.len() - n) {
+                let window = &words[start..start + n];
+                if !window.iter().all(|w| dict.contains(w.as_str())) {
+                    continue;
+                }
+                let phrase = window.join(" ");
+                if Mnemonic::parse_in(Language::English, &phrase).is_ok() {
+                    return Some(phrase);
+                }
             }
         }
     }
@@ -936,10 +953,17 @@ mod tests {
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     #[test]
-    fn bip39_found_inside_surrounding_prose() {
+    fn bip39_found_on_its_own_line_amid_other_lines() {
         let text = format!("Backup note from 2014.\n\n{TEST_MNEMONIC}\n\nkeep this safe");
         assert_eq!(find_bip39_phrase(&text).as_deref(), Some(TEST_MNEMONIC));
         assert!(text_signals(&text).contains(&TextSignal::Bip39));
+    }
+
+    #[test]
+    fn bip39_found_behind_a_short_label() {
+        // A few label tokens ahead of the phrase are within tolerance.
+        let text = format!("seed phrase backup: {TEST_MNEMONIC}");
+        assert_eq!(find_bip39_phrase(&text).as_deref(), Some(TEST_MNEMONIC));
     }
 
     #[test]
@@ -948,6 +972,37 @@ mod tests {
         let text = "the quick brown fox jumps over a lazy dog while the cat sleeps soundly here";
         assert!(find_bip39_phrase(text).is_none());
         assert!(!text_signals(text).contains(&TextSignal::Bip39));
+    }
+
+    /// The machine-wide failure mode: a *valid* mnemonic that is only a
+    /// fragment of a long line of prose or source code must not be reported.
+    /// This is what produced thousands of false hits across numpy/pandas/R
+    /// before the line-scoped rule.
+    #[test]
+    fn bip39_embedded_in_a_long_prose_line_is_rejected() {
+        // The real all-`abandon` vector, wrapped in enough surrounding words
+        // on the same line to exceed the per-line slack.
+        let line = format!(
+            "the function returns when the following words are processed in order namely {TEST_MNEMONIC} \
+             and afterwards the remaining computation proceeds to completion without any error at all"
+        );
+        assert!(
+            find_bip39_phrase(&line).is_none(),
+            "a mnemonic buried in a long line is prose, not a seed backup"
+        );
+        assert!(!text_signals(&line).contains(&TextSignal::Bip39));
+    }
+
+    /// But that same mnemonic, moved onto its own line in the same document,
+    /// is still found — recall is preserved.
+    #[test]
+    fn bip39_recall_preserved_when_phrase_is_isolated() {
+        let doc = format!(
+            "notes about the function and its behaviour across many lines of text\n\
+             {TEST_MNEMONIC}\n\
+             more notes that go on for a while afterwards"
+        );
+        assert_eq!(find_bip39_phrase(&doc).as_deref(), Some(TEST_MNEMONIC));
     }
 
     #[test]
