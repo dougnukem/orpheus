@@ -13,7 +13,7 @@ That number is the size of the prize; it's what's behind the passphrase.
 A passphrase you *almost* remember is worth a thousand GPU-hours. Before
 reaching for a cracker, write down everything you recall:
 
-- fragments you're sure of ("it had `hunter2` and a year in it")
+- fragments you're sure of ("it had my usual base word and a year in it")
 - your password habits from that era — a base word, a capital, a number, a
   symbol at the end
 - the years the wallet was active (the hunt report's file timestamps and
@@ -39,7 +39,7 @@ Generate variants of a base word rather than typing them by hand:
 # capitalisation, common suffixes, leet — a few thousand candidates
 python3 - <<'PY' > ~/passwords-v2.txt
 import itertools
-bases = ["hunter2", "hunter2"]
+bases = ["hunter2", "Hunter2"]  # your remembered base word(s), not committed
 suffixes = ["", "1", "123", "!", "!1", "#1"] + [str(y) for y in range(2011, 2017)]
 leet = str.maketrans({"a":"@","e":"3","o":"0","s":"$"})
 for b in bases:
@@ -65,7 +65,8 @@ python3 btcrecover.py --wallet ~/Dropbox/bitcoin/wallet.dat \
   --tokenlist tokens.txt --typos 2 --typos-capslock --typos-case
 ```
 
-A `tokens.txt` for "it had hunter2 and some numbers, maybe a bang":
+A `tokens.txt` for "it had my base word and some numbers, maybe a bang"
+(put your real base word here in the local file — never commit it):
 
 ```text
 hunter2
