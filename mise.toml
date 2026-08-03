@@ -168,6 +168,15 @@ run = [
 description = "Run the bundled offline demo scan (synthetic fixtures)"
 run = "cargo run -p orpheus-cli --locked -- demo"
 
+[tasks.hunt]
+description = "Sweep $HOME for wallet artifacts (offline discover + extract)"
+# Deliberately stops before `enrich` — that stage is the only one that talks
+# to the network, so it stays an explicit second step.
+run = [
+    "cargo run --release -p orpheus-cli --locked -- hunt discover --root {{env.HOME}}",
+    "cargo run --release -p orpheus-cli --locked -- hunt extract",
+]
+
 [tasks."demo:fixtures"]
 description = "Regenerate synthetic demo wallet fixtures"
 run = "cargo run -p orpheus-demo-fixtures --locked"
