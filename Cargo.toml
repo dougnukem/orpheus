@@ -52,7 +52,7 @@ walkdir = "2"
 
 # CLI
 clap = { version = "4.5", features = ["derive", "env"] }
-comfy-table = "7.1"
+comfy-table = "8.0"
 indicatif = "0.17"
 
 # HTTP client for balance providers
