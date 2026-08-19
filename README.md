@@ -21,8 +21,8 @@ orpheus/
 ├── mise.toml               # toolchain + tasks + hooks
 ├── rust-toolchain.toml
 ├── crates/
-│   ├── orpheus-core/       # extractors, crypto, balance, scanner
-│   ├── orpheus-cli/        # clap CLI: scan / extract / mnemonic / demo / serve
+│   ├── orpheus-core/       # extractors, crypto, balance, scanner, discovery, hunt
+│   ├── orpheus-cli/        # clap CLI: scan / hunt / extract / mnemonic / demo / serve
 │   │                       # `serve` bundles axum + rust-embed for apps/web/dist + /api
 │   ├── orpheus-tauri/      # Tauri v2 desktop shell; same API, no sidecar
 │   └── orpheus-demo-fixtures/
@@ -57,6 +57,7 @@ mise run build           # cargo build --workspace
 mise run test            # cargo test --workspace
 mise run lint            # fmt --check + clippy + pnpm lint
 mise run fmt             # cargo fmt + prettier
+mise run hunt            # sweep $HOME for wallets (offline)
 mise run cli:demo        # offline demo via CLI
 mise run server:dev      # `orpheus serve` on 127.0.0.1:3000
 mise run web:dev         # Vite dev server on :5173 proxying /api → :3000
@@ -77,6 +78,38 @@ cargo run -p orpheus-cli -- demo
 Output: 5 wallets, 325 keys, a synthetic 0.08730104 BTC including a
 homage to the 0.03865052 BTC recovered in the original session that
 seeded this project.
+
+## Hunting a whole machine
+
+`orpheus scan <dir>` assumes you know where the wallet is. When you don't
+— fifteen years of Dropbox, a folder you don't remember, a filename that
+doesn't end in `.dat` — use `hunt`:
+
+```bash
+orpheus hunt all --root ~ --passwords ~/passwords.txt
+```
+
+It sweeps by **magic bytes rather than filename**, so Bitcoin Core backups
+called `bitcoin_1776391129.legacy.bak` or `wallet.dat.backup` are found
+instead of skipped; dedupes copies by SHA-256; recovers keys offline; and
+then looks up balances and full transaction history.
+
+Five stages, of which only `enrich` touches the network:
+
+```text
+discover ──► triage ──► extract ──► enrich ──► report
+(offline)   (offline)   (offline)   (network)  (offline)
+```
+
+Every attempt — success or not — is appended to a ledger keyed on content
+digest, so a rerun skips what already worked and retries what didn't. That
+is what lets a recovery span months instead of one sitting.
+
+Output goes to `~/.orpheus/hunt/<run-id>/` (mode 0700), never into a
+repository, because it holds private keys. The report redacts WIFs unless
+you ask for `--unredact`.
+
+See [docs/wallet-hunt.md](docs/wallet-hunt.md).
 
 ## Supported wallet formats
 
