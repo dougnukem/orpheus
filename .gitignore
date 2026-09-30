@@ -49,6 +49,13 @@ passwords*.txt
 !fixtures/**/*.dat
 !fixtures/**/*.aes.json
 
+# Hunt vaults. `orpheus hunt` writes to ~/.orpheus/hunt/<run-id>/ by default,
+# well outside any checkout, but --base can point anywhere — so a hunt run
+# started from inside the repo must never become a commit. These directories
+# contain recovered private keys.
+.orpheus/
+hunt-runs/
+
 # Working docs
 ASSUMPTIONS.md
 TODO.md

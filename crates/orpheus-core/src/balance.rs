@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::models::{BalanceInfo, ExtractedKey};
+use crate::models::{BalanceInfo, ExtractedKey, TxRecord};
 
 /// Addresses per batch request when the provider supports batching.
 pub const MAX_BATCH: usize = 20;
@@ -66,6 +66,20 @@ struct MockEntry {
 pub trait BalanceProvider: Send + Sync {
     fn fetch(&self, addresses: &[String]) -> HashMap<String, BalanceInfo>;
     fn name(&self) -> &'static str;
+
+    /// Full transaction history for one address.
+    ///
+    /// Defaults to empty so existing providers — and the [`MockProvider`] test
+    /// seam — keep working unchanged. Only providers that can serve real
+    /// history override it.
+    fn transactions(&self, _address: &str) -> Vec<TxRecord> {
+        Vec::new()
+    }
+
+    /// Whether [`BalanceProvider::transactions`] returns real data.
+    fn supports_transactions(&self) -> bool {
+        false
+    }
 }
 
 pub struct MockProvider {
@@ -154,29 +168,153 @@ impl BalanceProvider for BlockstreamProvider {
         "blockstream.info"
     }
 
+    /// Esplora exposes a per-address endpoint with no batching, so requests go
+    /// out sequentially to stay friendly to the public rate limit.
+    ///
+    /// An address whose lookup fails after retries is **omitted** from the
+    /// result rather than recorded as zero. Zero means "we asked and this
+    /// address is empty"; a rate-limited request means "we do not know". For a
+    /// tool whose whole job is finding forgotten money, conflating those is how
+    /// a funded address gets written off as empty.
     fn fetch(&self, addresses: &[String]) -> HashMap<String, BalanceInfo> {
-        // Esplora exposes a per-address endpoint; no batch. We issue them
-        // sequentially to play nice with the public rate limit.
+        const ATTEMPTS: u32 = 3;
         let mut out = HashMap::new();
         for addr in addresses {
             let url = format!("{}/address/{addr}", self.base);
-            let info = match self
-                .client
-                .get(&url)
-                .send()
-                .and_then(|r| r.error_for_status())
-            {
-                Ok(resp) => resp
-                    .json::<serde_json::Value>()
-                    .ok()
-                    .map(|j| blockstream_info_from_json(addr, &j))
-                    .unwrap_or_else(|| BalanceInfo::zero(addr.clone())),
-                Err(_) => BalanceInfo::zero(addr.clone()),
-            };
-            out.insert(addr.clone(), info);
+            for attempt in 0..ATTEMPTS {
+                match self
+                    .client
+                    .get(&url)
+                    .send()
+                    .and_then(reqwest::blocking::Response::error_for_status)
+                    .and_then(reqwest::blocking::Response::json::<serde_json::Value>)
+                {
+                    Ok(json) => {
+                        out.insert(addr.clone(), blockstream_info_from_json(addr, &json));
+                        break;
+                    }
+                    Err(e) => {
+                        if attempt + 1 == ATTEMPTS {
+                            tracing::warn!(
+                                address = %addr,
+                                error = %e,
+                                "balance lookup failed after {ATTEMPTS} attempts; \
+                                 reporting as unknown rather than zero"
+                            );
+                        } else {
+                            // Linear backoff is enough for a public esplora;
+                            // the failure mode here is a 429, not congestion.
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                500 * u64::from(attempt + 1),
+                            ));
+                        }
+                    }
+                }
+            }
         }
         out
     }
+
+    fn supports_transactions(&self) -> bool {
+        true
+    }
+
+    /// Walk `/address/{addr}/txs`, then page backwards through
+    /// `/address/{addr}/txs/chain/{last_seen}`. Esplora returns 25 confirmed
+    /// transactions per page, so an address with a long history needs several
+    /// round trips.
+    fn transactions(&self, address: &str) -> Vec<TxRecord> {
+        const MAX_PAGES: usize = 40; // 40 * 25 = 1000 transactions, plenty here.
+        let mut out: Vec<TxRecord> = Vec::new();
+        let mut url = format!("{}/address/{address}/txs", self.base);
+
+        for _ in 0..MAX_PAGES {
+            let Ok(resp) = self
+                .client
+                .get(&url)
+                .send()
+                .and_then(reqwest::blocking::Response::error_for_status)
+            else {
+                break;
+            };
+            let Ok(json) = resp.json::<serde_json::Value>() else {
+                break;
+            };
+            let page = blockstream_txs_from_json(address, &json);
+            if page.is_empty() {
+                break;
+            }
+            let last_txid = page[page.len() - 1].txid.clone();
+            out.extend(page);
+            url = format!("{}/address/{address}/txs/chain/{last_txid}", self.base);
+        }
+        out
+    }
+}
+
+/// Parse a Blockstream `/address/{addr}/txs` array into [`TxRecord`]s.
+///
+/// Net value is computed as (outputs paying this address) minus (inputs spent
+/// from this address), so a sweep shows up as a single negative entry rather
+/// than as a confusing pair.
+///
+/// Kept pure so it can be pinned in tests without a network round trip.
+#[cfg(feature = "network")]
+#[must_use]
+pub fn blockstream_txs_from_json(address: &str, json: &serde_json::Value) -> Vec<TxRecord> {
+    let Some(txs) = json.as_array() else {
+        return vec![];
+    };
+    txs.iter()
+        .filter_map(|tx| {
+            let txid = tx.get("txid")?.as_str()?.to_string();
+            let status = tx.get("status");
+            let confirmed = status
+                .and_then(|s| s.get("confirmed"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+
+            let sum_for = |key: &str, unwrap_prevout: bool| -> u64 {
+                tx.get(key)
+                    .and_then(serde_json::Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(|item| {
+                                let target = if unwrap_prevout {
+                                    item.get("prevout")?
+                                } else {
+                                    item
+                                };
+                                let addr = target.get("scriptpubkey_address")?.as_str()?;
+                                if addr != address {
+                                    return None;
+                                }
+                                target.get("value")?.as_u64()
+                            })
+                            .sum()
+                    })
+                    .unwrap_or(0)
+            };
+
+            let received = sum_for("vout", false);
+            let spent = sum_for("vin", true);
+
+            Some(TxRecord {
+                txid,
+                address: address.to_string(),
+                confirmed,
+                block_height: status
+                    .and_then(|s| s.get("block_height"))
+                    .and_then(serde_json::Value::as_u64),
+                block_time: status
+                    .and_then(|s| s.get("block_time"))
+                    .and_then(serde_json::Value::as_u64),
+                net_value_sat: received as i64 - spent as i64,
+                fee_sat: tx.get("fee").and_then(serde_json::Value::as_u64),
+            })
+        })
+        .collect()
 }
 
 /// Parse a Blockstream `/address/{addr}` response into a [`BalanceInfo`].
@@ -434,5 +572,85 @@ mod tests {
         assert_eq!(info.total_received_sat, 5_000_000);
         assert_eq!(info.total_sent_sat, 1_134_948);
         assert_eq!(info.tx_count, 4);
+    }
+
+    /// A recorded two-transaction history: a 0.05 BTC receive, then a sweep
+    /// that spends it. Pinned so the signed net-value arithmetic cannot drift.
+    #[cfg(feature = "network")]
+    #[test]
+    fn blockstream_tx_parse_pins_signed_net_values() {
+        const ADDR: &str = "1EBuf21icKTE5m3HWVndKx2bTxvqrWCqV6";
+        let json: serde_json::Value = serde_json::from_str(
+            r#"[
+              {
+                "txid": "aa11",
+                "status": {"confirmed": true, "block_height": 300000, "block_time": 1399000000},
+                "fee": 10000,
+                "vin": [
+                  {"prevout": {"scriptpubkey_address": "1EBuf21icKTE5m3HWVndKx2bTxvqrWCqV6", "value": 5000000}}
+                ],
+                "vout": [
+                  {"scriptpubkey_address": "1SomeoneElse", "value": 4990000}
+                ]
+              },
+              {
+                "txid": "bb22",
+                "status": {"confirmed": true, "block_height": 290000, "block_time": 1390000000},
+                "fee": 5000,
+                "vin": [
+                  {"prevout": {"scriptpubkey_address": "1Funder", "value": 5100000}}
+                ],
+                "vout": [
+                  {"scriptpubkey_address": "1EBuf21icKTE5m3HWVndKx2bTxvqrWCqV6", "value": 5000000},
+                  {"scriptpubkey_address": "1Change", "value": 95000}
+                ]
+              }
+            ]"#,
+        )
+        .unwrap();
+
+        let txs = blockstream_txs_from_json(ADDR, &json);
+        assert_eq!(txs.len(), 2);
+
+        // The spend: this address funded 5_000_000 and received nothing back.
+        assert_eq!(txs[0].txid, "aa11");
+        assert_eq!(txs[0].net_value_sat, -5_000_000);
+        assert_eq!(txs[0].block_height, Some(300_000));
+        assert_eq!(txs[0].block_time, Some(1_399_000_000));
+        assert_eq!(txs[0].fee_sat, Some(10_000));
+        assert!(txs[0].confirmed);
+
+        // The receive: only the output paying this address counts.
+        assert_eq!(txs[1].txid, "bb22");
+        assert_eq!(
+            txs[1].net_value_sat, 5_000_000,
+            "change paying a different address must not be credited here"
+        );
+    }
+
+    #[cfg(feature = "network")]
+    #[test]
+    fn blockstream_tx_parse_handles_unconfirmed_and_empty() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"[{"txid":"cc33","status":{"confirmed":false},"vin":[],"vout":[{"scriptpubkey_address":"1Me","value":700}]}]"#,
+        )
+        .unwrap();
+        let txs = blockstream_txs_from_json("1Me", &json);
+        assert_eq!(txs.len(), 1);
+        assert!(!txs[0].confirmed);
+        assert_eq!(txs[0].block_height, None);
+        assert_eq!(txs[0].net_value_sat, 700);
+
+        let empty: serde_json::Value = serde_json::from_str("[]").unwrap();
+        assert!(blockstream_txs_from_json("1Me", &empty).is_empty());
+    }
+
+    /// Providers that cannot serve history must say so rather than silently
+    /// returning an empty list that reads like "this address has no history".
+    #[test]
+    fn non_network_providers_declare_no_tx_support() {
+        assert!(!NoopProvider.supports_transactions());
+        assert!(NoopProvider.transactions("1abc").is_empty());
+        assert!(!MockProvider { path: None }.supports_transactions());
     }
 }
