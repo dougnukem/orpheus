@@ -2,8 +2,6 @@
 
 ![Orpheus](https://github.com/user-attachments/assets/33de7189-3eaf-4239-b696-e03cac7c078a)
 
-> **καταβαίνω** — *to descend*
->
 > Recover lost cryptocurrency from forgotten wallets.
 
 Orpheus is a Rust + Tauri v2 tool for extracting private keys from old Bitcoin
