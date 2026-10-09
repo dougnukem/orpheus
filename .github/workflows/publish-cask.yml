@@ -68,7 +68,7 @@ jobs:
           fi
 
       - if: steps.gate.outputs.skip == 'false'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.tag }}
 
@@ -112,7 +112,7 @@ jobs:
 
       - if: steps.gate.outputs.skip == 'false'
         name: checkout tap repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.TAP_OWNER }}/${{ env.TAP_REPO }}
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

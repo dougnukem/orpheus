@@ -92,17 +92,17 @@ pub fn parse_address(addr: &str) -> Result<String, CryptoError> {
 
 /// AES-256-CBC decrypt with PKCS7-padded output. Returns plaintext on success.
 pub fn aes_cbc_decrypt(key: &[u8; 32], iv: &[u8; 16], ciphertext: &[u8]) -> Option<Vec<u8>> {
-    use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+    use aes::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
     type Cbc = cbc::Decryptor<aes::Aes256>;
     Cbc::new(key.into(), iv.into())
-        .decrypt_padded_vec_mut::<Pkcs7>(ciphertext)
+        .decrypt_padded_vec::<Pkcs7>(ciphertext)
         .ok()
 }
 
 /// Scrypt KDF used by MultiBit v3 wallets: N=16384, r=8, p=1, 32-byte output.
 pub fn scrypt_aes_key(password: &[u8], salt: &[u8]) -> Result<[u8; 32], CryptoError> {
     let params =
-        scrypt::Params::new(14, 8, 1, 32).map_err(|e| CryptoError::Bip32(e.to_string()))?;
+        scrypt::Params::new(14, 8, 1).map_err(|e| CryptoError::Bip32(e.to_string()))?;
     let mut out = [0u8; 32];
     scrypt::scrypt(password, salt, &params, &mut out)
         .map_err(|e| CryptoError::Bip32(e.to_string()))?;
