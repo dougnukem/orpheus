@@ -160,8 +160,7 @@ fn build_multibit_encrypted(privs: &[[u8; 32]], password: &str) -> Vec<u8> {
     for (i, p) in privs.iter().enumerate() {
         let iv = [(0x22u8 ^ i as u8); 16];
         type Cbc = cbc::Encryptor<aes::Aes256>;
-        let ct: Vec<u8> =
-            Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec::<Pkcs7>(p);
+        let ct: Vec<u8> = Cbc::new((&aes_key).into(), (&iv).into()).encrypt_padded_vec::<Pkcs7>(p);
         blob.extend_from_slice(IV_TAG);
         blob.extend_from_slice(&iv);
         blob.extend_from_slice(DATA_TAG);
