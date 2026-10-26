@@ -212,7 +212,7 @@ The `docs/password-recovery.md` guide covers techniques and tools for users who 
 
 **Rule-based mutation:**
 Take known/likely passwords and apply transformations:
-- Capitalization variants (`hunter2` -> `hunter2`, `hunter2`, `hunter2`)
+- Capitalization variants (`hunter2` -> `Hunter2`, `HUNTER2`, `hUNTER2`)
 - Common suffixes (`!`, `1`, `123`, `2015`, `!1`, `#1`)
 - Leet speak (`a->@`, `e->3`, `o->0`, `s->$`)
 - Keyboard patterns, doubled words, reversed strings
@@ -220,7 +220,7 @@ Take known/likely passwords and apply transformations:
 
 **Dictionary + hybrid attacks:**
 - Common password wordlists (rockyou, etc.)
-- Combined with user-provided hint tokens ("I know it had hunter2 and some numbers")
+- Combined with user-provided hint tokens ("I know it had my base word and some numbers")
 - Token-based approach: provide word fragments, tool tries all combinations
 
 **btcrecover integration:**
@@ -233,7 +233,7 @@ The best existing tool for Bitcoin wallet password recovery. Our guide documents
 
 **Pattern generation:**
 For users who remember partial passwords:
-- `orpheus generate-passwords --pattern "hunter2{4digits}{punct}"` outputs a wordlist
+- `orpheus generate-passwords --pattern "<baseword>{4digits}{punct}"` outputs a wordlist
 - Feed output to `--passwords` flag or to btcrecover
 
 ## Security Best Practices
