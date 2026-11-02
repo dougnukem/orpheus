@@ -6,6 +6,7 @@ use crate::models::{SourceType, WalletScanResult};
 
 pub mod bip39_mnemonic;
 pub mod bitcoin_core;
+pub mod bitcoin_core_encrypted;
 pub mod blockchain_com;
 pub mod encrypted;
 pub mod multibit;
