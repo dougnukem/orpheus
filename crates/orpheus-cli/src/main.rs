@@ -8,8 +8,10 @@ use comfy_table::{Cell, CellAlignment, Table, modifiers::UTF8_ROUND_CORNERS, pre
 use orpheus_core::{
     ScanSummary, WalletScanResult,
     balance::{BalanceProvider, MockProvider, ProviderKind, provider_from_kind},
+    discovery::DiscoverOptions,
     extractors::bip39_mnemonic::{DEFAULT_SPECS, derive_bip39},
     extractors::blockchain_com::decode_mnemonic,
+    hunt,
     scanner::scan_path,
 };
 
@@ -71,6 +73,20 @@ enum Command {
         #[arg(long)]
         wordlist: Option<PathBuf>,
     },
+    /// Hunt a whole machine for wallet artifacts, then report on them
+    ///
+    /// `scan` answers "what wallets are in this directory". `hunt` answers
+    /// "what is on this machine, what have I already tried, and what is it
+    /// worth" — it sniffs magic bytes rather than filenames, dedupes copies,
+    /// keeps an append-only ledger of every recovery attempt, and can pull
+    /// full transaction history for any address that has seen activity.
+    ///
+    /// Output goes to ~/.orpheus/hunt/<run-id>/ (mode 0700), never into a
+    /// repository, because it contains private keys.
+    Hunt {
+        #[command(subcommand)]
+        cmd: HuntCmd,
+    },
     /// Run the offline demo against bundled fixtures
     Demo,
     /// Serve the embedded web UI + JSON API
@@ -95,6 +111,86 @@ enum OutputFormat {
     Table,
     Json,
     Csv,
+}
+
+/// Stages of the hunt pipeline. `all` is the normal entry point; the
+/// individual stages exist so the offline prefix (discover → extract) can run
+/// on an air-gapped machine and `enrich` can run somewhere else.
+#[derive(Subcommand)]
+enum HuntCmd {
+    /// Run every stage: discover, extract, enrich, report
+    All {
+        /// Directory to sweep. Repeatable. Defaults to $HOME.
+        #[arg(long = "root", value_name = "PATH")]
+        roots: Vec<PathBuf>,
+        /// File containing one candidate password per line
+        #[arg(long)]
+        passwords: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = CliProvider::Blockstream, env = "ORPHEUS_PROVIDER")]
+        provider: CliProvider,
+        /// Mock balance JSON file (used when --provider mock)
+        #[arg(long)]
+        mock_file: Option<PathBuf>,
+        /// Where run directories live [default: ~/.orpheus/hunt]
+        #[arg(long)]
+        base: Option<PathBuf>,
+        /// Skip per-address transaction history (balances only)
+        #[arg(long)]
+        no_transactions: bool,
+        /// Print full private keys in the report instead of redacting them
+        #[arg(long)]
+        unredact: bool,
+        /// Re-attempt artifacts the ledger already records as solved
+        #[arg(long)]
+        retry_solved: bool,
+    },
+    /// Stage 1+2 — walk the roots and inventory candidates (offline)
+    Discover {
+        #[arg(long = "root", value_name = "PATH")]
+        roots: Vec<PathBuf>,
+        #[arg(long)]
+        base: Option<PathBuf>,
+    },
+    /// Stage 3 — run extractors over the inventory (offline)
+    Extract {
+        /// Run to operate on [default: the most recent]
+        #[arg(long)]
+        run_id: Option<String>,
+        #[arg(long)]
+        passwords: Option<PathBuf>,
+        #[arg(long)]
+        base: Option<PathBuf>,
+        #[arg(long)]
+        retry_solved: bool,
+    },
+    /// Stage 4 — look up balances and transaction history (network)
+    Enrich {
+        #[arg(long)]
+        run_id: Option<String>,
+        #[arg(long, value_enum, default_value_t = CliProvider::Blockstream, env = "ORPHEUS_PROVIDER")]
+        provider: CliProvider,
+        #[arg(long)]
+        mock_file: Option<PathBuf>,
+        #[arg(long)]
+        base: Option<PathBuf>,
+        #[arg(long)]
+        no_transactions: bool,
+    },
+    /// Stage 5 — render the Markdown report
+    Report {
+        #[arg(long)]
+        run_id: Option<String>,
+        #[arg(long)]
+        base: Option<PathBuf>,
+        /// Print full private keys instead of redacting them
+        #[arg(long)]
+        unredact: bool,
+    },
+    /// List recorded hunt runs
+    Runs {
+        #[arg(long)]
+        base: Option<PathBuf>,
+    },
 }
 
 /// Values accepted by `--provider`. Kept in lockstep with
@@ -191,6 +287,7 @@ fn main() -> Result<()> {
             }
             other => anyhow::bail!("unknown mnemonic kind: {other}"),
         },
+        Command::Hunt { cmd } => run_hunt(cmd)?,
         Command::Demo => {
             let demo_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../..")
@@ -230,6 +327,250 @@ fn main() -> Result<()> {
                 .build()?
                 .block_on(serve::run(args))?;
         }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// `orpheus hunt`
+// ---------------------------------------------------------------------------
+
+/// Default roots when the user gives none: just `$HOME`. Deliberately not `/`
+/// — a sweep of the system volume is all noise and needs Full Disk Access.
+fn resolve_roots(roots: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+    if !roots.is_empty() {
+        return Ok(roots);
+    }
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| {
+            anyhow::anyhow!("no --root given and neither HOME nor USERPROFILE is set")
+        })?;
+    Ok(vec![PathBuf::from(home)])
+}
+
+/// Open an existing run by id, or the most recent one.
+fn open_run(base: Option<&std::path::Path>, run_id: Option<&str>) -> Result<hunt::RunDir> {
+    match run_id {
+        Some(id) => Ok(hunt::RunDir::create(base, Some(id))?),
+        None => hunt::RunDir::latest(base)?.ok_or_else(|| {
+            anyhow::anyhow!("no hunt runs found — start one with `orpheus hunt all`")
+        }),
+    }
+}
+
+fn hunt_passwords(path: Option<&std::path::Path>) -> Result<Vec<String>> {
+    match path {
+        Some(p) => Ok(hunt::load_passwords(p)?),
+        None => Ok(vec![]),
+    }
+}
+
+fn do_discover(run: &hunt::RunDir, roots: Vec<PathBuf>) -> Result<Vec<orpheus_core::Candidate>> {
+    let roots = resolve_roots(roots)?;
+    for r in &roots {
+        tracing::info!(root = %r.display(), "sweeping");
+    }
+    let opts = DiscoverOptions {
+        roots,
+        ..Default::default()
+    };
+    let candidates = hunt::stage_discover(run, &opts)?;
+    println!(
+        "discovered {} candidate(s) -> {}",
+        candidates.len(),
+        run.file(orpheus_core::hunt::INVENTORY_FILE).display()
+    );
+    Ok(candidates)
+}
+
+fn do_extract(
+    run: &hunt::RunDir,
+    candidates: &[orpheus_core::Candidate],
+    passwords: &[String],
+    retry_solved: bool,
+) -> Result<Vec<hunt::ArtifactResult>> {
+    let results = hunt::stage_extract(run, candidates, passwords, !retry_solved)?;
+    let keys: usize = results.iter().map(|r| r.keys.len()).sum();
+    println!(
+        "extracted {} key(s) from {} artifact(s)",
+        keys,
+        results.iter().filter(|r| !r.keys.is_empty()).count()
+    );
+    Ok(results)
+}
+
+fn do_enrich(
+    run: &hunt::RunDir,
+    results: &[hunt::ArtifactResult],
+    provider: CliProvider,
+    mock_file: Option<PathBuf>,
+    no_transactions: bool,
+) -> Result<String> {
+    let prov = provider_from_kind(provider.into(), mock_file);
+    let Some(prov) = prov else {
+        println!("balance lookup skipped (--provider none)");
+        return Ok("none (lookup skipped)".to_string());
+    };
+    let name = prov.name().to_string();
+    let addresses = hunt::unique_addresses(results);
+    println!(
+        "looking up {} address(es) via {name}{}",
+        addresses.len(),
+        if no_transactions {
+            ""
+        } else {
+            " (with transaction history)"
+        }
+    );
+    let out = hunt::stage_enrich(run, results, prov.as_ref(), !no_transactions)?;
+    println!(
+        "  {} answered, {} transaction(s) fetched{}",
+        out.balances.len(),
+        out.transactions.len(),
+        if out.failed_lookups.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", {} lookup(s) FAILED (unknown, not empty — rerun enrich)",
+                out.failed_lookups.len()
+            )
+        }
+    );
+    Ok(name)
+}
+
+fn do_report(run: &hunt::RunDir, provider_name: &str, unredact: bool) -> Result<()> {
+    let candidates = hunt::load_inventory(run)?;
+    let results = hunt::load_results(run)?;
+    let balances = hunt::load_balances(run)?;
+    let txs = hunt::load_transactions(run)?;
+    let attempts = run.ledger()?.read_all()?;
+    let failed = hunt::load_failures(run)?;
+
+    let markdown = hunt::render_report(&hunt::ReportInput {
+        run,
+        candidates: &candidates,
+        results: &results,
+        balances: &balances,
+        transactions: &txs,
+        attempts: &attempts,
+        failed_lookups: &failed,
+        provider_name,
+        unredact,
+    });
+    let path = hunt::write_report(run, &markdown)?;
+
+    let s = hunt::summarize(&candidates, &results, &balances);
+    println!("\n─────────────────────────────────────────────────────────");
+    println!("  Orpheus hunt — run {}", run.id);
+    println!("─────────────────────────────────────────────────────────");
+    println!("  candidates found       {}", s.candidates);
+    println!("  distinct artifacts     {}", s.distinct_artifacts);
+    println!("  wallets extracted      {}", s.extracted_wallets);
+    println!("  keys recovered         {}", s.total_keys);
+    println!("  unique addresses       {}", s.unique_addresses);
+    println!("    funded                 {}", s.funded_addresses);
+    println!("    spent (now empty)      {}", s.spent_addresses);
+    println!("    never used             {}", s.unfunded_addresses);
+    println!(
+        "  total received         {} BTC",
+        hunt::sat_to_btc(s.total_received_sat)
+    );
+    println!(
+        "  current balance        {} BTC",
+        hunt::sat_to_btc(s.total_balance_sat)
+    );
+    println!("  wallets still locked   {}", s.needs_password);
+    println!("  archives to review     {}", s.archives_flagged);
+    println!("─────────────────────────────────────────────────────────");
+    println!("  report  {}", path.display());
+    println!("  vault   {}", run.root.display());
+    println!("─────────────────────────────────────────────────────────\n");
+    Ok(())
+}
+
+fn run_hunt(cmd: HuntCmd) -> Result<()> {
+    match cmd {
+        HuntCmd::All {
+            roots,
+            passwords,
+            provider,
+            mock_file,
+            base,
+            no_transactions,
+            unredact,
+            retry_solved,
+        } => {
+            let run = hunt::RunDir::create(base.as_deref(), None)?;
+            println!("hunt run {} -> {}", run.id, run.root.display());
+            let passes = hunt_passwords(passwords.as_deref())?;
+            let candidates = do_discover(&run, roots)?;
+            let results = do_extract(&run, &candidates, &passes, retry_solved)?;
+            let provider_name = do_enrich(&run, &results, provider, mock_file, no_transactions)?;
+            do_report(&run, &provider_name, unredact)?;
+        }
+        HuntCmd::Discover { roots, base } => {
+            let run = hunt::RunDir::create(base.as_deref(), None)?;
+            println!("hunt run {} -> {}", run.id, run.root.display());
+            do_discover(&run, roots)?;
+        }
+        HuntCmd::Extract {
+            run_id,
+            passwords,
+            base,
+            retry_solved,
+        } => {
+            let run = open_run(base.as_deref(), run_id.as_deref())?;
+            let passes = hunt_passwords(passwords.as_deref())?;
+            let candidates = hunt::load_inventory(&run)?;
+            if candidates.is_empty() {
+                anyhow::bail!(
+                    "run {} has an empty inventory — run `orpheus hunt discover` first",
+                    run.id
+                );
+            }
+            do_extract(&run, &candidates, &passes, retry_solved)?;
+        }
+        HuntCmd::Enrich {
+            run_id,
+            provider,
+            mock_file,
+            base,
+            no_transactions,
+        } => {
+            let run = open_run(base.as_deref(), run_id.as_deref())?;
+            let results = hunt::load_results(&run)?;
+            do_enrich(&run, &results, provider, mock_file, no_transactions)?;
+        }
+        HuntCmd::Report {
+            run_id,
+            base,
+            unredact,
+        } => {
+            let run = open_run(base.as_deref(), run_id.as_deref())?;
+            do_report(&run, "see balances.jsonl", unredact)?;
+        }
+        HuntCmd::Runs { base } => match hunt::RunDir::latest(base.as_deref())? {
+            None => println!("no hunt runs recorded"),
+            Some(latest) => {
+                let dir = latest
+                    .root
+                    .parent()
+                    .map(std::path::Path::to_path_buf)
+                    .unwrap_or(latest.root.clone());
+                let mut ids: Vec<String> = std::fs::read_dir(&dir)?
+                    .filter_map(std::result::Result::ok)
+                    .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                    .filter_map(|e| e.file_name().to_str().map(str::to_string))
+                    .collect();
+                ids.sort();
+                println!("hunt runs in {}:", dir.display());
+                for id in ids {
+                    println!("  {id}");
+                }
+            }
+        },
     }
     Ok(())
 }

@@ -101,8 +101,7 @@ pub fn aes_cbc_decrypt(key: &[u8; 32], iv: &[u8; 16], ciphertext: &[u8]) -> Opti
 
 /// Scrypt KDF used by MultiBit v3 wallets: N=16384, r=8, p=1, 32-byte output.
 pub fn scrypt_aes_key(password: &[u8], salt: &[u8]) -> Result<[u8; 32], CryptoError> {
-    let params =
-        scrypt::Params::new(14, 8, 1).map_err(|e| CryptoError::Bip32(e.to_string()))?;
+    let params = scrypt::Params::new(14, 8, 1).map_err(|e| CryptoError::Bip32(e.to_string()))?;
     let mut out = [0u8; 32];
     scrypt::scrypt(password, salt, &params, &mut out)
         .map_err(|e| CryptoError::Bip32(e.to_string()))?;
