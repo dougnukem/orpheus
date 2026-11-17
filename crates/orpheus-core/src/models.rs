@@ -77,6 +77,27 @@ impl BalanceInfo {
     }
 }
 
+/// One on-chain transaction touching a specific address.
+///
+/// `net_value_sat` is signed and relative to `address`: positive when the
+/// address received more than it spent in this transaction, negative when it
+/// was a spend. That is the number a recovery report actually wants — "this
+/// address got 0.05 BTC on this date, and sent it all out two years later".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TxRecord {
+    pub txid: String,
+    pub address: String,
+    pub confirmed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_height: Option<u64>,
+    /// Unix epoch seconds of the containing block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_time: Option<u64>,
+    pub net_value_sat: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_sat: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletScanResult {
     pub source_file: String,
