@@ -20,7 +20,7 @@ description = "Recover lost cryptocurrency from forgotten wallets"
 [workspace.dependencies]
 # Crypto — rust-bitcoin ecosystem (v0.32 is current stable as of 2026-04)
 bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
-bip39 = { version = "2.1", features = ["rand"] }
+bip39 = { version = "3.0", features = ["rand"] }
 secp256k1 = { version = "0.29", features = ["global-context", "rand-std"] }
 scrypt = { version = "0.12" }
 aes = "0.9"
